@@ -151,7 +151,7 @@ const CITY_SOCIALS: Record<'duitama' | 'tunja', { instagram: string; tiktok: str
 // City store addresses for "Retira Hoy"
 const CITY_ADDRESSES: Record<'duitama' | 'tunja', { short: string; full: string }> = {
   duitama: { short: 'C.C Pasaje Solano, Duitama', full: 'C.C Pasaje Solano, Local 1-02, Calle 20a # 12-32' },
-  tunja: { short: 'CC. Unicentro, Tunja', full: 'CC. Unicentro, Entrada 1, Isla Comercial, Tunja' },
+  tunja: { short: 'Oporto Centro de Negocios, Tunja', full: 'Av. Universitaria # 45a-40, Oficina 304, Oporto Centro de Negocios, Tunja' },
 }
 
 // Color map imported from shared module
@@ -1834,7 +1834,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                           <p className="text-gray-400 text-sm text-center mt-1">Escoge tu tienda Gordotech más cercana</p>
                         </div>
                         <div className="p-4 space-y-3">
-                          {([{ key: 'tunja' as const, label: 'Tunja', sublabel: 'Unicentro Isla Comercial' }, { key: 'duitama' as const, label: 'Duitama', sublabel: 'Pasaje Solano Local 102' }]).map(city => (
+                          {([{ key: 'tunja' as const, label: 'Tunja', sublabel: 'Oporto Centro de Negocios' }, { key: 'duitama' as const, label: 'Duitama', sublabel: 'Pasaje Solano Local 102' }]).map(city => (
                             <a
                               key={city.key}
                               href={`https://wa.me/${CITY_SOCIALS[city.key].whatsappNumber}?text=${encodeURIComponent(`Hola Gordotech ${city.label}! Me interesa el ${selectedProduct.name} (${displayCondition(selectedProduct.condition)})${selectedStorage ? ` - ${selectedStorage}` : ''}${selectedColor ? ` - ${selectedColor}` : ''}. ¿Tienen disponible y cuál es el precio?`)}`}
@@ -2000,7 +2000,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
               <div className="space-y-4 text-gray-300">
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-gray-500 mt-1 flex-shrink-0" />
-                  <p className="text-sm">CC. Unicentro, Entrada 1, Isla Comercial, Tunja, Boyaca</p>
+                  <p className="text-sm">Av. Universitaria # 45a-40, Oficina 304, Oporto Centro de Negocios, Tunja, Boyaca</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -2015,7 +2015,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                 <a href={CITY_SOCIALS.tunja.whatsapp} onClick={(e) => { e.stopPropagation(); trackWhatsAppClick('Tunja', 'sucursales_home') }} target="_blank" rel="noopener noreferrer" className="flex-1 py-3 bg-green-600/10 hover:bg-green-600 border border-green-600/30 hover:border-green-600 text-green-400 hover:text-white font-medium rounded-xl transition-all text-center text-sm">
                   WhatsApp
                 </a>
-                <a href="https://www.google.com/maps/dir//Gordotech+Tunja,+Universitaria+39+%2377+UNICENTRO,+Tunja,+Boyac%C3%A1/@5.539294,-73.356241,13z/data=!4m8!4m7!1m0!1m5!1m1!1s0x8e6a7d74e31ea55d:0x22aa657c5e1e9dc1!2m2!1d-73.3483432!2d5.5451975" onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="flex-1 py-3 bg-blue-500/10 hover:bg-blue-500 border border-blue-500/30 hover:border-blue-500 text-blue-400 hover:text-white font-medium rounded-xl transition-all text-center text-sm">
+                <a href="https://www.google.com/maps/dir//Oporto+Centro+de+Negocios,+Av.+Universitaria+%2345a-40,+Tunja,+Boyac%C3%A1" onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="flex-1 py-3 bg-blue-500/10 hover:bg-blue-500 border border-blue-500/30 hover:border-blue-500 text-blue-400 hover:text-white font-medium rounded-xl transition-all text-center text-sm">
                   Ver en Mapa
                 </a>
               </div>
@@ -2101,7 +2101,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
               className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
             >
               <img src="/images/whatsapp-logo.png" alt="WhatsApp" loading="lazy" decoding="async" className="w-8 h-8 object-contain" />
-                          <div><p className="text-white text-sm font-medium">Tunja</p><p className="text-gray-400 text-[10px]">Unicentro Isla Comercial</p></div>
+                          <div><p className="text-white text-sm font-medium">Tunja</p><p className="text-gray-400 text-[10px]">Oporto Centro de Negocios</p></div>
                         </a>
                         <a
                           href="https://wa.me/573144810431?text=Hola%20Gordotech%20Duitama%2C%20necesito%20información"
@@ -2230,7 +2230,7 @@ function PlanRetomaPage({ isDarkMode }: { isDarkMode: boolean }) {
                     onClick={() => trackWhatsAppClick('Tunja', 'plan_retoma')}
                     className="flex items-center gap-3 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-all w-full sm:w-auto">
                     <img src="/images/whatsapp-logo.png" alt="WhatsApp" loading="lazy" decoding="async" className="w-7 h-7 object-contain" />
-                    <div className="text-left"><p className="text-white text-sm font-medium">Tunja</p><p className="text-gray-400 text-[10px]">Unicentro Isla Comercial</p></div>
+                    <div className="text-left"><p className="text-white text-sm font-medium">Tunja</p><p className="text-gray-400 text-[10px]">Oporto Centro de Negocios</p></div>
                   </a>
                   <a href="https://wa.me/573213815465?text=Hola%20Clinica%20de%20Celulares%2C%20quiero%20informacion%20sobre%20el%20Plan%20Retoma" target="_blank" rel="noopener noreferrer"
                     onClick={() => trackWhatsAppClick('Clinica de Celulares', 'plan_retoma')}
@@ -2775,7 +2775,7 @@ function SemiNuevosPage({ isDarkMode }: { isDarkMode: boolean }) {
                       className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
                     >
                       <img src="/images/whatsapp-logo.png" alt="WhatsApp" loading="lazy" decoding="async" className="w-8 h-8 object-contain" />
-                      <div><p className="text-white text-sm font-medium">Tunja</p><p className="text-gray-400 text-[10px]">Unicentro Isla Comercial</p></div>
+                      <div><p className="text-white text-sm font-medium">Tunja</p><p className="text-gray-400 text-[10px]">Oporto Centro de Negocios</p></div>
                     </a>
                     <a
                       href="https://wa.me/573144810431?text=Hola%20Gordotech%20Duitama%2C%20quiero%20consultar%20disponibilidad%20de%20iPhones%20seminuevos"
@@ -3023,13 +3023,13 @@ const SUCURSAL_REVIEWS: Record<string, { reviews: SucursalReview[]; googleUrl: s
 
 const SUCURSAL_MAPS: Record<string, string> = {
   duitama: 'https://www.google.com/maps/dir//Gordotech+Duitama,+Cl.+20a+%2312-32,+Solano,+Duitama,+Boyac%C3%A1/@5.8259915,-73.0301255,14z/data=!4m8!4m7!1m0!1m5!1m1!1s0x8e6a3fb0048fe77f:0xd1f7a4fb7101b8e8!2m2!1d-73.0317497!2d5.8320283',
-  tunja: 'https://www.google.com/maps/dir//Gordotech+Tunja,+Universitaria+39+%2377+UNICENTRO,+Tunja,+Boyac%C3%A1/@5.539294,-73.356241,13z/data=!4m8!4m7!1m0!1m5!1m1!1s0x8e6a7d74e31ea55d:0x22aa657c5e1e9dc1!2m2!1d-73.3483432!2d5.5451975',
+  tunja: 'https://www.google.com/maps/dir//Oporto+Centro+de+Negocios,+Av.+Universitaria+%2345a-40,+Tunja,+Boyac%C3%A1',
   clinica: 'https://www.google.com/maps/search/Clinica+de+Celulares+Gordotech+San+Andresito+de+la+18+Duitama',
 }
 
 const DEFAULT_SUCURSALES: Sucursal[] = [
   { id: 1, name: 'Gordotech Duitama', slug: 'duitama', address: 'Pasaje Comercial Solano, Local 102', city: 'Duitama', image: '', whatsapp: '573144810431', instagram: 'https://www.instagram.com/gordotechduitama', tiktok: 'https://www.tiktok.com/@gordotech1', phone: '+57 314 481 0431', description: 'Tu destino Apple en Duitama', sort_order: 0, active: true },
-  { id: 2, name: 'Gordotech Tunja', slug: 'tunja', address: 'CC. Unicentro, Entrada 1, Isla Comercial', city: 'Tunja', image: '', whatsapp: '573219863883', instagram: 'https://www.instagram.com/gordotechtunja', tiktok: 'https://www.tiktok.com/@gordotech1', phone: '+57 321 986 3883', description: 'Tu destino Apple en Tunja', sort_order: 1, active: true },
+  { id: 2, name: 'Gordotech Tunja', slug: 'tunja', address: 'Av. Universitaria # 45a-40, Oficina 304, Oporto Centro de Negocios', city: 'Tunja', image: '', whatsapp: '573219863883', instagram: 'https://www.instagram.com/gordotechtunja', tiktok: 'https://www.tiktok.com/@gordotech1', phone: '+57 321 986 3883', description: 'Tu destino Apple en Tunja', sort_order: 1, active: true },
   { id: 3, name: 'Clinica de Celulares', slug: 'clinica', address: 'San Andresito de la 18, Local 11', city: 'Duitama', image: '', whatsapp: '573213815465', instagram: 'https://www.instagram.com/clinicadecelulares_gordotech', tiktok: 'https://www.tiktok.com/@gordotech1', phone: '+57 321 381 5465', description: 'Reparacion profesional - Diagnostico Gratis', sort_order: 2, active: true },
 ]
 
