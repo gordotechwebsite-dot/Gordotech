@@ -430,7 +430,7 @@ async def seed_default_data():
         else:
             default_sucursales = [
                 ("Gordotech Duitama", "duitama", "Pasaje Comercial Solano, Local 102", "Duitama", "", "573144810431", "https://www.instagram.com/gordotechduitama", "https://www.tiktok.com/@gordotech1", "+57 314 481 0431", "Tu destino Apple en Duitama", 0, 1),
-                ("Gordotech Tunja", "tunja", "CC. Unicentro, Entrada 1, Isla Comercial", "Tunja", "", "573219863883", "https://www.instagram.com/gordotechtunja", "https://www.tiktok.com/@gordotech1", "+57 321 986 3883", "Tu destino Apple en Tunja", 1, 1),
+                ("Gordotech Tunja", "tunja", "Av. Universitaria # 45a-40, Oficina 304, Oporto Centro de Negocios", "Tunja", "", "573219863883", "https://www.instagram.com/gordotechtunja", "https://www.tiktok.com/@gordotech1", "+57 321 986 3883", "Tu destino Apple en Tunja", 1, 1),
                 ("Clinica de Celulares", "clinica", "San Andresito de la 18, Local 11", "Duitama", "", "573213815465", "", "", "+57 321 381 5465", "Reparacion profesional de iPhones - Diagnostico Gratis", 2, 1),
             ]
             for s in default_sucursales:
