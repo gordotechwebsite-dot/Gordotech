@@ -79,7 +79,7 @@ const CITY_SOCIALS: Record<'duitama' | 'tunja', { instagram: string; tiktok: str
 // City store addresses for "Retira Hoy"
 const CITY_ADDRESSES: Record<'duitama' | 'tunja', { short: string; full: string }> = {
   duitama: { short: 'C.C Pasaje Solano, Duitama', full: 'C.C Pasaje Solano, Local 1-02, Calle 20a # 12-32' },
-  tunja: { short: 'Gordotech Tunja', full: 'Gordotech Tunja' },
+  tunja: { short: 'Oporto Centro de Negocios, Tunja', full: 'Av. Universitaria # 45a-40, Oficina 304, Oporto Centro de Negocios' },
 }
 
 // Spanish color name to CSS color mapping
@@ -2118,7 +2118,7 @@ function Store({ city, onChangeCity, onAdminClick, productSlug, productId, initi
               <div className="space-y-4 text-gray-300">
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-gray-500 mt-1 flex-shrink-0" />
-                  <p className="text-sm">Centro Comercial, Tunja, Boyaca</p>
+                  <p className="text-sm">Av. Universitaria # 45a-40, Oficina 304, Oporto Centro de Negocios, Tunja, Boyaca</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Clock className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -2133,7 +2133,7 @@ function Store({ city, onChangeCity, onAdminClick, productSlug, productId, initi
                 <a href={CITY_SOCIALS.tunja.whatsapp} target="_blank" rel="noopener noreferrer" className="flex-1 py-3 bg-green-600/10 hover:bg-green-600 border border-green-600/30 hover:border-green-600 text-green-400 hover:text-white font-medium rounded-xl transition-all text-center text-sm">
                   WhatsApp
                 </a>
-                <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="flex-1 py-3 bg-blue-500/10 hover:bg-blue-500 border border-blue-500/30 hover:border-blue-500 text-blue-400 hover:text-white font-medium rounded-xl transition-all text-center text-sm">
+                <a href="https://www.google.com/maps/search/?api=1&query=Oporto+Centro+de+Negocios%2C+Av.+Universitaria+%2345a-40%2C+Tunja%2C+Boyaca" target="_blank" rel="noopener noreferrer" className="flex-1 py-3 bg-blue-500/10 hover:bg-blue-500 border border-blue-500/30 hover:border-blue-500 text-blue-400 hover:text-white font-medium rounded-xl transition-all text-center text-sm">
                   Ver en Mapa
                 </a>
               </div>
