@@ -414,7 +414,8 @@ const repairServices = [
 ]
 
 const DEFAULT_HERO_SLIDES: HeroSlide[] = [
-  { id: 12, title: '', subtitle: '', image: '', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 0 },
+  { id: 13, title: '', subtitle: '', image: 'https://pub-f5ad4152bdf445228c0baa87da0d79b9.r2.dev/uploads/bcc36af2553541d48bba748cb2fc257f.jpg', video_url: '/videos/iphone18-pro-overview.mp4', link: '', active: true, sort_order: 0 },
+  { id: 12, title: '', subtitle: '', image: '', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 1 },
 ]
 
 
@@ -471,17 +472,20 @@ function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
     setVideoPlaying(false)
   }, [current])
 
-  // Timer: 13s per slide (video or image), never gets stuck
+  // Timer: videos play in full, 13s per image slide, never gets stuck
   useEffect(() => {
     if (isPaused || slides.length <= 1) return
     const currentSlide = slides[current]
     const hasVideo = currentSlide?.video_url && isVideoUrl(currentSlide.video_url)
-    if (hasVideo && !videoPlaying) {
-      // Video not playing yet: safety fallback after 8s in case autoplay fails
-      timerRef.current = setTimeout(goNext, 8000)
-      return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+    if (hasVideo) {
+      // Videos advance on 'ended'; safety fallback after 8s in case autoplay fails
+      if (!videoPlaying) {
+        timerRef.current = setTimeout(goNext, 8000)
+        return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+      }
+      return
     }
-    // 13s per slide for both video and image slides
+    // 13s per image slide
     timerRef.current = setTimeout(goNext, 13000)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [goNext, isPaused, slides.length, current, videoPlaying, slides])
@@ -524,6 +528,7 @@ function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
                 key={`video-${slide.id}-${current}`}
                 ref={(el) => { videoRefs.current[i] = el }}
                 src={i === current ? slide.video_url : undefined}
+                poster={slide.image || undefined}
                 autoPlay
                 muted
                 playsInline
