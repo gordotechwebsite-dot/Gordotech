@@ -415,7 +415,6 @@ const repairServices = [
 
 const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   { id: 12, title: '', subtitle: '', image: '', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 0 },
-  { id: 1, title: '', subtitle: '', image: '', video_url: '/videos/iphone17pro-intro-13s.mp4', link: '', active: true, sort_order: 1 },
 ]
 
 
