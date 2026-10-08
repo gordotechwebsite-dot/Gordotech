@@ -222,6 +222,21 @@ async def init_db():
         )
     """)
 
+    # Category banners table (cover image shown on top of a category page)
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS category_banners (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL DEFAULT '',
+            image TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            subtitle TEXT NOT NULL DEFAULT '',
+            link TEXT NOT NULL DEFAULT '',
+            active INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Product variants table (storage + color + price combinations)
     await db.execute("""
         CREATE TABLE IF NOT EXISTS product_variants (
