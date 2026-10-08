@@ -414,9 +414,24 @@ const repairServices = [
 ]
 
 const DEFAULT_HERO_SLIDES: HeroSlide[] = [
-  { id: 13, title: '', subtitle: '', image: 'https://pub-f5ad4152bdf445228c0baa87da0d79b9.r2.dev/uploads/bcc36af2553541d48bba748cb2fc257f.jpg', video_url: '/videos/iphone18-pro-overview.mp4', link: '', active: true, sort_order: 0 },
-  { id: 12, title: '', subtitle: '', image: '', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 1 },
+  { id: 13, title: '', subtitle: '', image: '/images/hero-iphone18-poster.jpg', video_url: '/videos/iphone18-pro-overview.mp4', link: '', active: true, sort_order: 0 },
+  { id: 12, title: '', subtitle: '', image: '/images/hero-macbook-neo-poster.jpg', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 1 },
 ]
+
+// Light 540p encodes for small screens, slow networks and Save-Data
+const LIGHT_HERO_VIDEOS = new Set(['/videos/iphone18-pro-overview.mp4', '/videos/macbook-neo-intro.mp4'])
+
+function prefersLightVideo() {
+  if (typeof navigator === 'undefined') return false
+  const conn = (navigator as Navigator & { connection?: { effectiveType?: string; saveData?: boolean } }).connection
+  if (conn?.saveData) return true
+  if (conn?.effectiveType && /(^|-)2g$/.test(conn.effectiveType)) return true
+  return typeof window !== 'undefined' && window.innerWidth <= 768
+}
+
+function heroVideoSrc(url: string, light: boolean) {
+  return light && LIGHT_HERO_VIDEOS.has(url) ? url.replace(/\.mp4$/, '-540p.mp4') : url
+}
 
 
 // Main Store Component
@@ -448,6 +463,8 @@ function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [videoPlaying, setVideoPlaying] = useState(false)
   const videoRefs = useRef<Record<number, HTMLVideoElement | null>>({})
+  const lastProgressRef = useRef(Date.now())
+  const [lightVideo] = useState(prefersLightVideo)
 
   const goTo = useCallback((index: number) => {
     if (isTransitioning || index === current) return
@@ -467,9 +484,19 @@ function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
     goTo((current - 1 + slides.length) % slides.length)
   }, [current, slides.length, goTo])
 
-  // Reset videoPlaying when slide changes
+  // Restart the current video from the top and keep the others paused
   useEffect(() => {
     setVideoPlaying(false)
+    lastProgressRef.current = Date.now()
+    Object.entries(videoRefs.current).forEach(([index, el]) => {
+      if (!el) return
+      if (Number(index) === current) {
+        el.currentTime = 0
+        el.play()?.catch(() => {})
+      } else if (!el.paused) {
+        el.pause()
+      }
+    })
   }, [current])
 
   // Timer: videos play in full, 13s per image slide, never gets stuck
@@ -478,12 +505,21 @@ function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
     const currentSlide = slides[current]
     const hasVideo = currentSlide?.video_url && isVideoUrl(currentSlide.video_url)
     if (hasVideo) {
-      // Videos advance on 'ended'; safety fallback after 8s in case autoplay fails
       if (!videoPlaying) {
-        timerRef.current = setTimeout(goNext, 8000)
+        // Still buffering: the poster is on screen, so give it room before giving up
+        timerRef.current = setTimeout(goNext, 15000)
         return () => { if (timerRef.current) clearTimeout(timerRef.current) }
       }
-      return
+      // Playing: advance on 'ended'. Watchdog retries a stalled video, then moves on
+      const watchdog = setInterval(() => {
+        const stalledFor = Date.now() - lastProgressRef.current
+        if (stalledFor > 10000) {
+          goNext()
+        } else if (stalledFor > 4000) {
+          videoRefs.current[current]?.play()?.catch(() => {})
+        }
+      }, 2000)
+      return () => clearInterval(watchdog)
     }
     // 13s per image slide
     timerRef.current = setTimeout(goNext, 13000)
@@ -525,15 +561,17 @@ function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
           {slide.video_url && isVideoUrl(slide.video_url) && (
             <div className="absolute inset-0" style={{ overflow: 'hidden' }}>
               <video
-                key={`video-${slide.id}-${current}`}
+                key={`video-${slide.id}`}
                 ref={(el) => { videoRefs.current[i] = el }}
-                src={i === current ? slide.video_url : undefined}
+                src={i === current || i === (current + 1) % slides.length ? heroVideoSrc(slide.video_url, lightVideo) : undefined}
                 poster={slide.image || undefined}
-                autoPlay
+                autoPlay={i === current}
+                loop={slides.length <= 1}
                 muted
                 playsInline
-                preload={i === current ? 'auto' : 'none'}
-                onPlaying={i === current ? () => setVideoPlaying(true) : undefined}
+                preload={i === current || i === (current + 1) % slides.length ? 'auto' : 'none'}
+                onPlaying={i === current ? () => { setVideoPlaying(true); lastProgressRef.current = Date.now() } : undefined}
+                onTimeUpdate={i === current ? () => { lastProgressRef.current = Date.now() } : undefined}
                 onEnded={i === current ? () => { if (!isPaused) goNext() } : undefined}
                 onError={i === current ? () => { if (!isPaused) goNext() } : undefined}
                 className="pointer-events-none"
