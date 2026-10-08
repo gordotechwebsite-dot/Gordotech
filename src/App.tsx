@@ -176,6 +176,17 @@ type HeroSlide = {
   sort_order: number
 }
 
+type CategoryBanner = {
+  id: number
+  category: string
+  image: string
+  title: string
+  subtitle: string
+  link: string
+  active: boolean
+  sort_order: number
+}
+
 function isVideoUrl(url: string): boolean {
   if (!url) return false
   return url.endsWith('.mp4') || url.endsWith('.webm') || url.endsWith('.mov') || url.includes('/videos/')
@@ -3322,6 +3333,46 @@ function SucursalesPage({ isDarkMode }: { isDarkMode: boolean }) {
   )
 }
 
+// Category cover - image configured per category in the admin panel
+function CategoryCover({ banner, onNavigate }: { banner: CategoryBanner; onNavigate: (to: string) => void }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+
+  const content = (
+    <>
+      <img
+        src={banner.image}
+        alt={banner.title || 'Portada'}
+        className="w-full h-full object-cover"
+        onError={() => setFailed(true)}
+      />
+      {(banner.title || banner.subtitle) && (
+        <div className="absolute bottom-0 left-0 right-0 px-5 py-4 bg-black/55">
+          {banner.title && <p className="text-white text-xl md:text-3xl font-semibold leading-tight">{banner.title}</p>}
+          {banner.subtitle && <p className="text-gray-200 text-sm md:text-base mt-1">{banner.subtitle}</p>}
+        </div>
+      )}
+    </>
+  )
+
+  const wrapperClass = 'relative block w-full aspect-[16/7] md:aspect-[16/5] rounded-2xl overflow-hidden mb-8'
+
+  if (banner.link) {
+    const isInternal = banner.link.startsWith('/')
+    return (
+      <button
+        type="button"
+        onClick={() => { if (isInternal) onNavigate(banner.link); else window.open(banner.link, '_blank', 'noopener') }}
+        className={`${wrapperClass} text-left`}
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return <div className={wrapperClass}>{content}</div>
+}
+
 // Category page - shows all products of a specific category
 function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClick: () => void; isDarkMode: boolean; setIsDarkMode: (v: boolean) => void }) {
   const { slug } = useParams<{ slug: string }>()
@@ -3329,6 +3380,7 @@ function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClic
   const [allProducts, setAllProducts] = useState<Product[]>(products)
   const [activeCondition, setActiveCondition] = useState<string>(slug === 'iphones' ? 'nuevos' : 'todos')
   const [loading, setLoading] = useState(true)
+  const [banner, setBanner] = useState<CategoryBanner | null>(null)
 
   // Category label mapping
   const categoryLabels: Record<string, string> = {
@@ -3377,6 +3429,23 @@ function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClic
     loadProducts()
   }, [slug, categoryLabel])
 
+  useEffect(() => {
+    if (!slug) return
+    let cancelled = false
+    const loadBanner = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/category-banners?category=${encodeURIComponent(slug)}`)
+        const data = await res.json()
+        const first = (data?.banners || []).find((b: CategoryBanner) => b.image)
+        if (!cancelled) setBanner(first || null)
+      } catch {
+        if (!cancelled) setBanner(null)
+      }
+    }
+    loadBanner()
+    return () => { cancelled = true }
+  }, [slug])
+
   const filtered = allProducts.filter(p => {
     if (activeCondition === 'nuevos' && p.condition !== 'Nuevo') return false
     if (activeCondition === 'semi-usados' && p.condition !== 'Semi-usado') return false
@@ -3417,6 +3486,11 @@ function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClic
 
       <div className="pt-20 pb-12">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10">
+          {/* Category cover - only rendered when configured in the admin panel */}
+          {banner && (
+            <CategoryCover banner={banner} onNavigate={navigate} />
+          )}
+
           {/* Condition filter tabs - only for iPhones */}
           {slug === 'iphones' && (
           <div className="flex gap-2 mb-8 justify-center">

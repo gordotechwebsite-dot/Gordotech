@@ -122,7 +122,27 @@ type Popup = {
   sort_order: number
 }
 
-type Tab = 'dashboard' | 'products' | 'bubbles' | 'services' | 'gallery' | 'slideshow' | 'marquee' | 'settings' | 'sucursales' | 'resenas' | 'popups'
+type CategoryBanner = {
+  id: number
+  category: string
+  image: string
+  title: string
+  subtitle: string
+  link: string
+  active: boolean
+  sort_order: number
+}
+
+const CATEGORY_BANNER_OPTIONS = [
+  { value: 'iphones', label: 'iPhones' },
+  { value: 'ipads', label: 'iPads' },
+  { value: 'macbook', label: 'MacBook' },
+  { value: 'airpods', label: 'AirPods' },
+  { value: 'apple-watch', label: 'Apple Watch' },
+  { value: 'accesorios', label: 'Accesorios' },
+]
+
+type Tab = 'dashboard' | 'products' | 'bubbles' | 'services' | 'gallery' | 'slideshow' | 'marquee' | 'settings' | 'sucursales' | 'resenas' | 'popups' | 'portadas'
 
 const TAB_PATHS: Record<string, Tab> = {
   '/': 'dashboard',
@@ -138,6 +158,7 @@ const TAB_PATHS: Record<string, Tab> = {
   '/sucursales': 'sucursales',
   '/resenas': 'resenas',
   '/popups': 'popups',
+  '/portadas': 'portadas',
 }
 
 const TAB_TO_PATH: Record<Tab, string> = {
@@ -152,6 +173,7 @@ const TAB_TO_PATH: Record<Tab, string> = {
   sucursales: '/sucursales',
   resenas: '/resenas',
   popups: '/popups',
+  portadas: '/portadas',
 }
 
 function getTabFromPath(): Tab {
@@ -1095,6 +1117,12 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
   const [popupForm, setPopupForm] = useState({ image: '', title: '', link: '', sort_order: 0, active: true })
   const [savingPopup, setSavingPopup] = useState(false)
 
+  // Category banners (portadas)
+  const [categoryBanners, setCategoryBanners] = useState<CategoryBanner[]>([])
+  const [editingBanner, setEditingBanner] = useState<CategoryBanner | null | 'new'>(null)
+  const [bannerForm, setBannerForm] = useState({ category: 'iphones', image: '', title: '', subtitle: '', link: '', sort_order: 0, active: true })
+  const [savingBanner, setSavingBanner] = useState(false)
+
   // Password change
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -1231,6 +1259,16 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
     }
   }, [token])
 
+  const loadCategoryBanners = useCallback(async () => {
+    if (!token) return
+    try {
+      const data = await apiGet('/api/admin/category-banners', token)
+      setCategoryBanners(data.banners || [])
+    } catch {
+      // not critical
+    }
+  }, [token])
+
   // Sync tab with browser back/forward
   useEffect(() => {
     const onPopState = () => setActiveTabRaw(getTabFromPath())
@@ -1251,8 +1289,9 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
       loadReviews()
       loadGalleryPhotos()
       loadPopups()
+      loadCategoryBanners()
     }
-  }, [token, loadStats, loadProducts, loadCategories, loadBubbles, loadServices, loadHeroSlides, loadMarqueeTexts, loadSucursales, loadReviews, loadGalleryPhotos, loadPopups])
+  }, [token, loadStats, loadProducts, loadCategories, loadBubbles, loadServices, loadHeroSlides, loadMarqueeTexts, loadSucursales, loadReviews, loadGalleryPhotos, loadPopups, loadCategoryBanners])
 
   const handleDelete = async () => {
     if (!deleteConfirm || !token) return
@@ -1273,6 +1312,7 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
       if (deleteConfirm.type === 'review') await apiDelete(`/api/admin/resenas/${deleteConfirm.id}`, token)
       if (deleteConfirm.type === 'gallery') await apiDelete(`/api/admin/repair-gallery/${deleteConfirm.id}`, token)
       if (deleteConfirm.type === 'popup') await apiDelete(`/api/admin/popups/${deleteConfirm.id}`, token)
+      if (deleteConfirm.type === 'banner') await apiDelete(`/api/admin/category-banners/${deleteConfirm.id}`, token)
       setDeleteConfirm(null)
       loadStats()
       if (deleteConfirm.type === 'product') loadProducts()
@@ -1284,6 +1324,7 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
       if (deleteConfirm.type === 'review') loadReviews()
       if (deleteConfirm.type === 'gallery') loadGalleryPhotos()
       if (deleteConfirm.type === 'popup') loadPopups()
+      if (deleteConfirm.type === 'banner') loadCategoryBanners()
     } catch {
       alert('Error eliminando')
     }
@@ -1325,6 +1366,7 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
     { id: 'sucursales', label: 'Sucursales', icon: <MapPin className="w-5 h-5" /> },
     { id: 'resenas', label: 'Resenas', icon: <MessageSquare className="w-5 h-5" /> },
     { id: 'popups', label: 'Pop Up', icon: <Image className="w-5 h-5" /> },
+    { id: 'portadas', label: 'Portadas', icon: <Image className="w-5 h-5" /> },
     { id: 'settings', label: 'Config', icon: <Lock className="w-5 h-5" /> },
   ]
 
@@ -2329,6 +2371,143 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
                     }} disabled={savingPopup || !popupForm.image} className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-xl transition-colors text-sm md:text-base font-medium flex items-center justify-center gap-2">
                       <Save className="w-5 h-5" />
                       {savingPopup ? 'Guardando...' : 'Guardar'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CATEGORY BANNERS TAB */}
+        {activeTab === 'portadas' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl md:text-4xl font-bold" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '2px' }}>PORTADAS DE CATEGORIA</h2>
+              <button onClick={() => { setEditingBanner('new'); setBannerForm({ category: 'iphones', image: '', title: '', subtitle: '', link: '', sort_order: 0, active: true }) }}
+                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl transition-colors text-sm md:text-base font-medium">
+                <Plus className="w-5 h-5" /> Nueva Portada
+              </button>
+            </div>
+
+            {categoryBanners.length === 0 ? (
+              <div className="text-center py-16 text-gray-400">
+                <Image className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                <p className="text-lg">No hay portadas configuradas</p>
+                <p className="text-sm mt-1">Sin portada, la pagina de la categoria se ve igual que ahora. Medida recomendada: 1600 x 500 px</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {categoryBanners.map(banner => (
+                  <div key={banner.id} className="bg-gray-900/50 border border-white/10 rounded-2xl overflow-hidden">
+                    {banner.image && (
+                      <div className="aspect-[16/5] bg-gray-800 overflow-hidden">
+                        <img src={banner.image} alt={banner.title || 'Portada'} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white font-medium truncate">
+                          {CATEGORY_BANNER_OPTIONS.find(o => o.value === banner.category)?.label || banner.category}
+                          {banner.title ? ` - ${banner.title}` : ''}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${banner.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                          {banner.active ? 'Activa' : 'Inactiva'}
+                        </span>
+                      </div>
+                      {banner.link && <p className="text-gray-400 text-xs truncate">{banner.link}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={async () => {
+                          try { await apiPost(`/api/admin/category-banners/${banner.id}/toggle`, {}, token); loadCategoryBanners() } catch { alert('Error') }
+                        }} className="flex-1 py-2 border border-white/10 text-gray-300 rounded-lg hover:bg-white/5 transition-colors text-sm flex items-center justify-center gap-1">
+                          {banner.active ? <ToggleRight className="w-4 h-4 text-green-400" /> : <ToggleLeft className="w-4 h-4" />}
+                          {banner.active ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button onClick={() => { setEditingBanner(banner); setBannerForm({ category: banner.category, image: banner.image, title: banner.title, subtitle: banner.subtitle, link: banner.link, sort_order: banner.sort_order, active: banner.active }) }}
+                          className="p-2 border border-white/10 text-gray-300 rounded-lg hover:bg-white/5 transition-colors">
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setDeleteConfirm({ type: 'banner', id: banner.id, name: banner.title || `Portada #${banner.id}` })}
+                          className="p-2 border border-red-500/30 text-red-400 rounded-lg hover:bg-red-500/10 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Category Banner Form Modal */}
+            {editingBanner !== null && (
+              <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+                <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                  <div className="flex items-center justify-between p-5 md:p-6 border-b border-white/10">
+                    <h3 className="text-xl md:text-2xl font-bold text-white">{editingBanner === 'new' ? 'Nueva Portada' : 'Editar Portada'}</h3>
+                    <button onClick={() => setEditingBanner(null)} className="text-gray-400 hover:text-white"><X className="w-6 h-6" /></button>
+                  </div>
+                  <div className="p-5 md:p-6 space-y-5">
+                    <div>
+                      <label className="block text-gray-400 text-sm md:text-base mb-1.5">Categoria *</label>
+                      <select value={bannerForm.category} onChange={e => setBannerForm(f => ({...f, category: e.target.value}))}
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50">
+                        {CATEGORY_BANNER_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-sm md:text-base mb-1.5">Imagen * (recomendado 1600 x 500 px)</label>
+                      <ImageUploader token={token} currentImage={bannerForm.image} onUpload={url => setBannerForm(f => ({...f, image: url}))} />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-sm md:text-base mb-1.5">Titulo (opcional, sobre la imagen)</label>
+                      <input value={bannerForm.title} onChange={e => setBannerForm(f => ({...f, title: e.target.value}))}
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50" placeholder="ej: iPhone 17 Pro" />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-sm md:text-base mb-1.5">Subtitulo (opcional)</label>
+                      <input value={bannerForm.subtitle} onChange={e => setBannerForm(f => ({...f, subtitle: e.target.value}))}
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50" placeholder="ej: Ya disponible en Duitama y Tunja" />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 text-sm md:text-base mb-1.5">Link (opcional, al hacer clic en la portada)</label>
+                      <input value={bannerForm.link} onChange={e => setBannerForm(f => ({...f, link: e.target.value}))}
+                        className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50" placeholder="https://gordotech.co/producto/1" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-gray-400 text-sm md:text-base mb-1.5">Orden</label>
+                        <input type="number" value={bannerForm.sort_order} onChange={e => setBannerForm(f => ({...f, sort_order: parseInt(e.target.value) || 0}))}
+                          className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50" />
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <div className="flex items-center gap-3">
+                          <label className="text-gray-400 text-sm md:text-base">Activa</label>
+                          <button onClick={() => setBannerForm(f => ({...f, active: !f.active}))} className="p-1">
+                            {bannerForm.active ? <ToggleRight className="w-7 h-7 text-green-400" /> : <ToggleLeft className="w-7 h-7 text-gray-500" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 p-5 md:p-6 border-t border-white/10">
+                    <button onClick={() => setEditingBanner(null)} className="flex-1 py-3 border border-white/10 text-gray-300 rounded-xl hover:bg-white/5 transition-colors text-sm md:text-base">Cancelar</button>
+                    <button onClick={async () => {
+                      if (!bannerForm.image) return
+                      setSavingBanner(true)
+                      try {
+                        if (editingBanner === 'new') {
+                          await apiPost('/api/admin/category-banners', bannerForm, token)
+                        } else {
+                          await apiPut(`/api/admin/category-banners/${editingBanner.id}`, bannerForm, token)
+                        }
+                        setEditingBanner(null)
+                        loadCategoryBanners()
+                      } catch { alert('Error guardando portada') } finally { setSavingBanner(false) }
+                    }} disabled={savingBanner || !bannerForm.image} className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white rounded-xl transition-colors text-sm md:text-base font-medium flex items-center justify-center gap-2">
+                      <Save className="w-5 h-5" />
+                      {savingBanner ? 'Guardando...' : 'Guardar'}
                     </button>
                   </div>
                 </div>

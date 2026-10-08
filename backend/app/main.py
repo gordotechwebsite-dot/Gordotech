@@ -262,6 +262,24 @@ class PopupUpdate(BaseModel):
     active: Optional[bool] = None
     sort_order: Optional[int] = None
 
+class CategoryBannerCreate(BaseModel):
+    category: str = ""
+    image: str = ""
+    title: str = ""
+    subtitle: str = ""
+    link: str = ""
+    active: bool = True
+    sort_order: int = 0
+
+class CategoryBannerUpdate(BaseModel):
+    category: Optional[str] = None
+    image: Optional[str] = None
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    link: Optional[str] = None
+    active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -496,6 +514,18 @@ def row_to_popup(row):
         "id": row["id"],
         "image": row["image"],
         "title": row["title"],
+        "link": row["link"],
+        "active": bool(row["active"]),
+        "sort_order": row["sort_order"],
+    }
+
+def row_to_category_banner(row):
+    return {
+        "id": row["id"],
+        "category": row["category"],
+        "image": row["image"],
+        "title": row["title"],
+        "subtitle": row["subtitle"],
         "link": row["link"],
         "active": bool(row["active"]),
         "sort_order": row["sort_order"],
@@ -1764,5 +1794,98 @@ async def admin_toggle_popup(popup_id: int, username: str = Depends(get_current_
         await db.execute("UPDATE popups SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", (popup_id,))
         await db.commit()
         return {"message": "Popup actualizado"}
+    finally:
+        await db.close()
+
+# ==================== CATEGORY BANNERS (PUBLIC) ====================
+
+@app.get("/api/category-banners")
+async def get_category_banners(category: Optional[str] = Query(None)):
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        if category:
+            cursor = await db.execute(
+                "SELECT * FROM category_banners WHERE active = 1 AND category = ? ORDER BY sort_order ASC",
+                (category,)
+            )
+        else:
+            cursor = await db.execute("SELECT * FROM category_banners WHERE active = 1 ORDER BY sort_order ASC")
+        rows = await cursor.fetchall()
+        return {"banners": [row_to_category_banner(r) for r in rows]}
+    finally:
+        await db.close()
+
+# ==================== ADMIN CATEGORY BANNERS CRUD ====================
+
+@app.get("/api/admin/category-banners")
+async def admin_get_category_banners(username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        cursor = await db.execute("SELECT * FROM category_banners ORDER BY sort_order ASC, id ASC")
+        rows = await cursor.fetchall()
+        return {"banners": [row_to_category_banner(r) for r in rows]}
+    finally:
+        await db.close()
+
+@app.post("/api/admin/category-banners")
+async def admin_create_category_banner(banner: CategoryBannerCreate, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        cursor = await db.execute(
+            "INSERT INTO category_banners (category, image, title, subtitle, link, active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (banner.category, banner.image, banner.title, banner.subtitle, banner.link, 1 if banner.active else 0, banner.sort_order)
+        )
+        await db.commit()
+        return {"message": "Portada creada", "id": cursor.lastrowid}
+    finally:
+        await db.close()
+
+@app.put("/api/admin/category-banners/{banner_id}")
+async def admin_update_category_banner(banner_id: int, banner: CategoryBannerUpdate, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        cursor = await db.execute("SELECT * FROM category_banners WHERE id = ?", (banner_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Portada no encontrada")
+        updates = {}
+        if banner.category is not None: updates["category"] = banner.category
+        if banner.image is not None: updates["image"] = banner.image
+        if banner.title is not None: updates["title"] = banner.title
+        if banner.subtitle is not None: updates["subtitle"] = banner.subtitle
+        if banner.link is not None: updates["link"] = banner.link
+        if banner.active is not None: updates["active"] = 1 if banner.active else 0
+        if banner.sort_order is not None: updates["sort_order"] = banner.sort_order
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            values = list(updates.values()) + [banner_id]
+            await db.execute(f"UPDATE category_banners SET {set_clause} WHERE id = ?", values)
+            await db.commit()
+        return {"message": "Portada actualizada"}
+    finally:
+        await db.close()
+
+@app.delete("/api/admin/category-banners/{banner_id}")
+async def admin_delete_category_banner(banner_id: int, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        cursor = await db.execute("SELECT id FROM category_banners WHERE id = ?", (banner_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Portada no encontrada")
+        await db.execute("DELETE FROM category_banners WHERE id = ?", (banner_id,))
+        await db.commit()
+        return {"message": "Portada eliminada"}
+    finally:
+        await db.close()
+
+@app.post("/api/admin/category-banners/{banner_id}/toggle")
+async def admin_toggle_category_banner(banner_id: int, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        await db.execute("UPDATE category_banners SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", (banner_id,))
+        await db.commit()
+        return {"message": "Portada actualizada"}
     finally:
         await db.close()
