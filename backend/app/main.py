@@ -5,9 +5,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, Union, Any
 import aiosqlite
+import sqlite3
 import json
 import os
 import re
+import urllib.request
 import uuid
 import shutil
 import time
@@ -1692,39 +1694,41 @@ def _read_uploaded_image(url: str) -> bytes | None:
     if url.startswith("/uploads/"):
         path = os.path.join(UPLOAD_DIR, url.split("/")[-1])
         return open(path, "rb").read() if os.path.exists(path) else None
-    import urllib.request
-
     with urllib.request.urlopen(url, timeout=30) as resp:
         return resp.read()
 
 
 @app.post("/api/admin/optimize-images")
-async def optimize_existing_images(username: str = Depends(get_current_admin)):
+def optimize_existing_images(limit: int = 10, username: str = Depends(get_current_admin)):
     """
-    Re-encode every already-uploaded image as WebP and point the database at the
-    new files. Originals are left in place, so this is safe to re-run.
+    Re-encode already-uploaded images as WebP and point the database at the new
+    files, at most `limit` per call. Originals are left in place, so this is
+    safe to re-run until `remaining` is 0.
+
+    Defined as a sync endpoint on purpose: downloading and re-encoding is
+    blocking work, so FastAPI runs it in a threadpool and the API keeps serving.
     """
     # Matches both R2/Fly absolute URLs and legacy relative "/uploads/..." paths
     url_re = re.compile(r'(?:https?://[A-Za-z0-9._-]+)?/uploads/[A-Za-z0-9._-]+')
 
-    db = await aiosqlite.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=30)
     try:
         urls: set[str] = set()
         rows_by_column: dict[tuple[str, str], list[tuple[int, str]]] = {}
         for table, column in IMAGE_COLUMNS:
             try:
-                cursor = await db.execute(f"SELECT id, {column} FROM {table}")
-                rows = [(r[0], r[1]) for r in await cursor.fetchall() if r[1]]
+                rows = [(r[0], r[1]) for r in db.execute(f"SELECT id, {column} FROM {table}") if r[1]]
             except Exception:
                 continue
             rows_by_column[(table, column)] = rows
             for _, value in rows:
                 urls.update(m for m in url_re.findall(value) if not m.endswith(".webp"))
 
+        batch = sorted(urls)[:limit]
         replacements: dict[str, str] = {}
         saved_bytes = 0
         failed = 0
-        for url in sorted(urls):
+        for url in batch:
             try:
                 content = _read_uploaded_image(url)
                 if not content:
@@ -1746,19 +1750,19 @@ async def optimize_existing_images(username: str = Depends(get_current_admin)):
                 for old, new in replacements.items():
                     new_value = new_value.replace(old, new)
                 if new_value != value:
-                    await db.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_value, row_id))
+                    db.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_value, row_id))
                     updated_rows += 1
-        await db.commit()
+        db.commit()
 
         return {
-            "images_found": len(urls),
             "images_converted": len(replacements),
             "rows_updated": updated_rows,
             "failed": failed,
             "saved_mb": round(saved_bytes / (1024 * 1024), 2),
+            "remaining": len(urls) - len(batch),
         }
     finally:
-        await db.close()
+        db.close()
 
 # ==================== ADMIN STATS ====================
 
