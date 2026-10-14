@@ -426,11 +426,16 @@ const repairServices = [
 
 const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   { id: 13, title: '', subtitle: '', image: '/images/hero-iphone18-poster.jpg', video_url: '/videos/iphone18-pro-overview.mp4', link: '', active: true, sort_order: 0 },
-  { id: 12, title: '', subtitle: '', image: '/images/hero-macbook-neo-poster.jpg', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 1 },
+  { id: 14, title: '', subtitle: '', image: '/images/hero-iphone-duo-poster.jpg', video_url: '/videos/iphone-duo-overview.mp4', link: '', active: true, sort_order: 1 },
+  { id: 12, title: '', subtitle: '', image: '/images/hero-macbook-neo-poster.jpg', video_url: '/videos/macbook-neo-intro.mp4', link: '', active: true, sort_order: 2 },
 ]
 
 // Light 540p encodes for small screens, slow networks and Save-Data
-const LIGHT_HERO_VIDEOS = new Set(['/videos/iphone18-pro-overview.mp4', '/videos/macbook-neo-intro.mp4'])
+const LIGHT_HERO_VIDEOS = new Set([
+  '/videos/iphone18-pro-overview.mp4',
+  '/videos/iphone-duo-overview.mp4',
+  '/videos/macbook-neo-intro.mp4',
+])
 
 function prefersLightVideo() {
   if (typeof navigator === 'undefined') return false
