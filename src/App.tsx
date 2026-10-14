@@ -3071,6 +3071,65 @@ const SUCURSAL_REVIEWS: Record<string, { reviews: SucursalReview[]; googleUrl: s
   },
 }
 
+const GOOGLE_STATS: Record<string, { rating: number; count: number }> = {
+  duitama: { rating: 5.0, count: 208 },
+  tunja: { rating: 4.9, count: 99 },
+  clinica: { rating: 4.9, count: 37 },
+}
+
+const GOOGLE_LATEST_REVIEWS: Record<string, SucursalReview[]> = {
+  duitama: [
+    { name: 'Gustavo Casas', text: 'Compré un iPhone 16 pro. Muy buen equipo y lo mejor fue la atención. Tienen buen conocimiento u asesoran muy bien.', rating: 5 },
+    { name: 'Wem Mantilla', text: 'Un día viajamos de Sogamoso a Tunja en bus este tenía como cargar el celular y conectamos nuestro cargador en esas mi hijo se mareo y estaba malito y el bus paró en Duitama me baje con el para ver si el aire le ayudaba pero no se mejoro dejamos ir el bus cuando el se fue al rato me acordé del cargador y se nos quedó en el...para rematar..perdí lo de dos pasajes, mi hijo se enfermo y para rematar el cargador se queda..y el celular sin batería para avisar..me acordé de un comercial de gordotech y me acuerdo q decía al lado del inovo cogimos un taxi llegamos y si estaban ahí.. cómprame s el cargador original, buen precio excelente atención y al final todo no fue malo pude comunicarme y hoy en dia tengo ese cargador aún funcionando ..esto fue hace años y medio un abrazo..', rating: 5 },
+    { name: 'FERNANDO ROJAS', text: 'Es un lugar espectacular la atención es 10 de 10 en abril de 2025 compré un iPhone 16 pro Max de 256 nuevo excelente equipo no molesta para nada y lo mejor que con las recomendaciones que me dieron en gordotech su batería sigue estando al 100%', rating: 5 },
+    { name: 'ramiro leon', text: 'Mi experiencia fue increíble, muy buena la atención, ame mi nuevo celular iPhone 17 pro max sin duda volvería a comprar con ustedes.', rating: 5 },
+    { name: 'Karol Malaver', text: '“Sin duda, Gordotech llegó a revolucionar la tecnología en Boyacá. Es un lugar que genera confianza desde el primer momento: la atención es excelente, te asesoran durante todo el proceso y ofrecen muy buenas garantías con una relación calidad–precio increíble. Además, cuentan con sedes en las principales ciudades del departamento. ¡Me encanta! ✨”', rating: 5 },
+    { name: 'Laura Natalia', text: 'Súper bien atendida, me gusto mucho, recomendadisimo', rating: 5 },
+    { name: 'Daniela Mejia Consuegra', text: 'Me encantó la atención, compré mi celu y me asesoraron muy bien, todo fue transparente y rápido 🔝🔝🔝🔝Súper recomendado', rating: 5 },
+    { name: 'Erik Hernandez', text: 'Excelente servicio muy serios y buena atención', rating: 5 },
+    { name: 'Jacob Matias', text: 'Excelente servicio , compré mi iPhone 16 pro Max súper feliz de comprar en gordotech 🤗✨🔥✅', rating: 5 },
+    { name: 'Jairo Ivan Osma Suancha', text: 'Bastante buena atención, muy completo el servicio y con equipos en excelente calidad, estado y todo', rating: 5 },
+  ],
+  tunja: [
+    { name: 'sebastian Montoya', text: 'De verdad que da gusto comprar en un sitio así. La atención es espectacular, el equipo es muy profesional y se nota que les importa el cliente. Me ayudaron en todo el proceso y resolvieron todas mis dudas. 10/10 🔥', rating: 5 },
+    { name: 'Hugo Alejandro Ramirez', text: 'Excelente servicio , calidad en productos 100% originales!!', rating: 5 },
+    { name: 'Claudia Maritza Arenas Giraldo', text: 'Excelente atención, gran variedad de productos y tenían todo lo que yo necesitaba', rating: 5 },
+    { name: 'Leidy Pinzon', text: 'Muy amables las chicas que atienden, y los productos a muy buen precio y excelente calidad.', rating: 5 },
+    { name: 'Karen Rosas', text: 'Excelente servicio, las chicas muy atentas y eficientes! Y los productos 10/10 súper recomendado', rating: 5 },
+    { name: 'luis alejandro rodriguez', text: 'La atención, los precios y los equipos son los mejores. Gran axperiencia ✌️', rating: 5 },
+    { name: 'Brayan Esteban Fonseca', text: 'Excelente servicio y calidad, super recomendados', rating: 5 },
+    { name: 'David Reyes', text: 'Excelente precio, muy buen servicio', rating: 5 },
+    { name: 'michael daniel garcia bernal', text: 'Compre el s26 ultra, excelente atencion y muy buen servicio total recomendacion 10/10', rating: 5 },
+  ],
+  clinica: [
+    { name: 'Leonardo Salcedo', text: 'Excelente servicio, buena atención, y excelente trabajo en el arreglo de mi equipo. Muchas gracias.', rating: 5 },
+    { name: 'Jhoan Pinto', text: 'Efectivo y recomendado, súper me resolvió en un momento, lo había llevado a otro lugar y me dijeron que no tenía arreglo y lo traje aquí donde el gordotech y me lo arreglo en 10 minutos, buen despachador y técnico, me voy feliz y sastifecha gracias!', rating: 5 },
+    { name: 'GINNA ALEXANDRA ARRIETA SUAREZ', text: 'Excelente servicio, el técnico Andrés me colaboró mucho es muy amable ágil y bueno en su labor, estoy muy contenta de los resultados, el celular quedó como nuevo  Súper recomendado !!! 🥰', rating: 5 },
+    { name: 'jose david vargas mayorga', text: 'Excelente servicio lo recomiendo viene con todo lo q dice', rating: 5 },
+    { name: 'Cristian Montañez', text: 'Le cambié la batería y la pantalla y el técnico Andrés y las chicas me dieron un excelente servicio, el tinto que me gastó la empresa está muy rico', rating: 5 },
+    { name: 'Victor Navarro', text: 'Compré mi iPhone en esta tienda y la experiencia fue excelente. Desde el inicio me atendieron muy bien, resolvieron todas mis dudas y me explicaron las diferencias entre los modelos sin presión para comprar.  El equipo llegó en perfecto estado, totalmente original y tal como lo describían. Además, la entrega fue rápida y bien organizada. Me dio mucha confianza la forma en que manejan todo, desde el pago hasta la garantía.  Sin duda recomiendo esta tienda si estás pensando en comprar un iPhone, ya que ofrecen buen servicio, transparencia y productos de calidad. Volvería a comprar con ellos sin pensarlo.', rating: 5 },
+    { name: 'Deybid Muñoz', text: 'Tiene buen servicio, hice un cambio de tapa de mi 14 pro Max, quedó perfecto y la calidad buena. La atención de Daniela fue perfecta.', rating: 5 },
+    { name: 'Lisethe Vargas', text: 'Tuve buena asesoría de parte del técnico y a la chica, fueron muy sinceros si era bueno salvar mi celular, y lleve uno mejor 😅', rating: 5 },
+    { name: 'Sleyder A', text: 'El iPhone 17 pro Max que compré con ellos salió perfecto y su garantía de un año lo mejora aún más. Daniela demostró mucha responsabilidad a la hora de la venta.', rating: 5 },
+    { name: 'Sammy Rojas', text: 'Buen trabajo , increíble resultado, le metió mucho amor al teléfono Muy buenos equipos y excelente equipo de trabajo', rating: 5 },
+  ],
+}
+
+function withGoogleReviews(slug: string, reviews: SucursalReview[]) {
+  const latest = GOOGLE_LATEST_REVIEWS[slug] || []
+  const seen = new Set(latest.map(r => r.name))
+  return {
+    reviews: [...latest, ...reviews.filter(r => !seen.has(r.name))],
+    googleUrl: SUCURSAL_REVIEWS[slug]?.googleUrl || '#',
+    rating: GOOGLE_STATS[slug]?.rating ?? 5.0,
+    count: GOOGLE_STATS[slug]?.count ?? reviews.length,
+  }
+}
+
+function fallbackReviewsMap() {
+  return Object.fromEntries(Object.keys(SUCURSAL_REVIEWS).map(slug => [slug, withGoogleReviews(slug, SUCURSAL_REVIEWS[slug].reviews)]))
+}
+
 const SUCURSAL_MAPS: Record<string, string> = {
   duitama: 'https://www.google.com/maps/dir//Gordotech+Duitama,+Cl.+20a+%2312-32,+Solano,+Duitama,+Boyac%C3%A1/@5.8259915,-73.0301255,14z/data=!4m8!4m7!1m0!1m5!1m1!1s0x8e6a3fb0048fe77f:0xd1f7a4fb7101b8e8!2m2!1d-73.0317497!2d5.8320283',
   tunja: 'https://www.google.com/maps/dir//Oporto+Centro+de+Negocios,+Av.+Universitaria+%2345a-40,+Tunja,+Boyac%C3%A1',
@@ -3154,25 +3213,24 @@ function SucursalesPage({ isDarkMode }: { isDarkMode: boolean }) {
               const rData = await rRes.json()
               if (rData.reviews && rData.reviews.length > 0) {
                 const apiReviews: SucursalReview[] = rData.reviews.map((r: { customer_name: string; text: string; rating: number }) => ({ name: r.customer_name, text: r.text, rating: r.rating }))
-                const avgRating = apiReviews.reduce((sum: number, r: SucursalReview) => sum + r.rating, 0) / apiReviews.length
-                rMap[s.slug] = { reviews: apiReviews, googleUrl: SUCURSAL_REVIEWS[s.slug]?.googleUrl || '#', rating: Math.round(avgRating * 10) / 10, count: apiReviews.length }
+                rMap[s.slug] = withGoogleReviews(s.slug, apiReviews)
               } else if (SUCURSAL_REVIEWS[s.slug]) {
-                rMap[s.slug] = SUCURSAL_REVIEWS[s.slug]
+                rMap[s.slug] = withGoogleReviews(s.slug, SUCURSAL_REVIEWS[s.slug].reviews)
               }
             } catch {
               if (SUCURSAL_REVIEWS[s.slug]) {
-                rMap[s.slug] = SUCURSAL_REVIEWS[s.slug]
+                rMap[s.slug] = withGoogleReviews(s.slug, SUCURSAL_REVIEWS[s.slug].reviews)
               }
             }
           }))
           setReviewsMap(rMap)
         } else {
           setSucursales(DEFAULT_SUCURSALES)
-          setReviewsMap(SUCURSAL_REVIEWS)
+          setReviewsMap(fallbackReviewsMap())
         }
       } catch {
         setSucursales(DEFAULT_SUCURSALES)
-        setReviewsMap(SUCURSAL_REVIEWS)
+        setReviewsMap(fallbackReviewsMap())
       } finally {
         setLoading(false)
       }
