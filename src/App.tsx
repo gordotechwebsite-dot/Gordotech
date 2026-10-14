@@ -1870,9 +1870,9 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                 <div className="space-y-3">
                   <button
                     onClick={() => setWhatsappCityModal(true)}
-                    className="w-full py-4 bg-green-600/10 hover:bg-green-600 border border-green-600/30 hover:border-green-600 text-green-400 hover:text-white font-semibold rounded-2xl transition-all flex items-center justify-center gap-3 text-base"
+                    className="mx-auto max-w-full px-6 py-3 bg-green-600/10 hover:bg-green-600 border border-green-600/30 hover:border-green-600 text-green-400 hover:text-white font-semibold rounded-2xl transition-all flex items-center justify-center text-base"
                   >
-                    {selectedProduct.condition === 'Semi-usado' ? 'Consulta tu Equipo/Precio/Estado de bateria/Capacidad en Tiempo real' : (<><MessageCircle className="w-5 h-5" />{selectedProduct.price && selectedProduct.price !== '-' ? 'Comprar por WhatsApp' : 'Consultar Precio por WhatsApp'}</>)}
+                    {selectedProduct.condition === 'Semi-usado' ? 'Consulta tu Equipo/Precio/Estado de bateria/Capacidad en Tiempo real' : (selectedProduct.price && selectedProduct.price !== '-' ? 'Comprar por WhatsApp' : 'Consultar Precio por WhatsApp')}
                   </button>
 
                   {/* WhatsApp City Selector Modal */}
