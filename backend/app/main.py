@@ -17,7 +17,7 @@ from jose import jwt, JWTError
 import bcrypt as bcrypt_lib
 
 from app.database import get_db, init_db, seed_default_data, DB_PATH
-from app.storage import upload_file, is_r2_enabled, UPLOAD_DIR
+from app.storage import upload_file, optimize_image, is_r2_enabled, UPLOAD_DIR
 
 app = FastAPI()
 
@@ -1663,10 +1663,102 @@ async def upload_image(file: UploadFile = File(...), username: str = Depends(get
     except Exception:
         pass  # If cropping fails, use original image
     
+    content, ext = optimize_image(content, ext)
+
     url = upload_file(content, ext)
     filename = url.split("/")[-1]
     
     return {"url": url, "filename": filename}
+
+
+# Tables/columns that store uploaded image URLs (plain URL or JSON with URLs inside)
+IMAGE_COLUMNS = [
+    ("categories", "image"),
+    ("products", "image"),
+    ("products", "images"),
+    ("products", "color_images"),
+    ("model_bubbles", "image"),
+    ("repair_services", "image"),
+    ("hero_slides", "image"),
+    ("sucursales", "image"),
+    ("repair_gallery", "image"),
+    ("popups", "image"),
+    ("category_banners", "image"),
+]
+
+
+def _read_uploaded_image(url: str) -> bytes | None:
+    """Read an uploaded image by its public URL, from R2/HTTP or the local upload dir."""
+    if url.startswith("/uploads/"):
+        path = os.path.join(UPLOAD_DIR, url.split("/")[-1])
+        return open(path, "rb").read() if os.path.exists(path) else None
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        return resp.read()
+
+
+@app.post("/api/admin/optimize-images")
+async def optimize_existing_images(username: str = Depends(get_current_admin)):
+    """
+    Re-encode every already-uploaded image as WebP and point the database at the
+    new files. Originals are left in place, so this is safe to re-run.
+    """
+    # Matches both R2/Fly absolute URLs and legacy relative "/uploads/..." paths
+    url_re = re.compile(r'(?:https?://[A-Za-z0-9._-]+)?/uploads/[A-Za-z0-9._-]+')
+
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        urls: set[str] = set()
+        rows_by_column: dict[tuple[str, str], list[tuple[int, str]]] = {}
+        for table, column in IMAGE_COLUMNS:
+            try:
+                cursor = await db.execute(f"SELECT id, {column} FROM {table}")
+                rows = [(r[0], r[1]) for r in await cursor.fetchall() if r[1]]
+            except Exception:
+                continue
+            rows_by_column[(table, column)] = rows
+            for _, value in rows:
+                urls.update(m for m in url_re.findall(value) if not m.endswith(".webp"))
+
+        replacements: dict[str, str] = {}
+        saved_bytes = 0
+        failed = 0
+        for url in sorted(urls):
+            try:
+                content = _read_uploaded_image(url)
+                if not content:
+                    failed += 1
+                    continue
+                ext = os.path.splitext(url)[1] or ".jpg"
+                optimized, new_ext = optimize_image(content, ext)
+                if new_ext == ext:
+                    continue
+                replacements[url] = upload_file(optimized, new_ext)
+                saved_bytes += len(content) - len(optimized)
+            except Exception:
+                failed += 1
+
+        updated_rows = 0
+        for (table, column), rows in rows_by_column.items():
+            for row_id, value in rows:
+                new_value = value
+                for old, new in replacements.items():
+                    new_value = new_value.replace(old, new)
+                if new_value != value:
+                    await db.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_value, row_id))
+                    updated_rows += 1
+        await db.commit()
+
+        return {
+            "images_found": len(urls),
+            "images_converted": len(replacements),
+            "rows_updated": updated_rows,
+            "failed": failed,
+            "saved_mb": round(saved_bytes / (1024 * 1024), 2),
+        }
+    finally:
+        await db.close()
 
 # ==================== ADMIN STATS ====================
 
