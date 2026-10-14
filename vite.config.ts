@@ -13,6 +13,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // React must have its own chunk: otherwise rollup folds it into
+          // three-vendor (shared with @react-three) and the entry pulls the
+          // whole 3D bundle on every page load.
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/scheduler/')
+          ) {
+            return 'react-vendor'
+          }
           // Split Three.js and 3D libraries into their own chunk (only loaded when 3D viewer is used)
           if (id.includes('node_modules/three/') || id.includes('node_modules/@react-three/')) {
             return 'three-vendor'
