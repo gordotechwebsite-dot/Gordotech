@@ -31,6 +31,10 @@ R2_PUBLIC_URL = os.environ.get("R2_PUBLIC_URL", "").rstrip("/")
 # Check if R2 is configured
 R2_ENABLED = bool(R2_ACCOUNT_ID and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_PUBLIC_URL)
 
+# Image optimization: product photos are displayed at ~400-800 CSS px
+MAX_IMAGE_DIMENSION = 1400
+WEBP_QUALITY = 85
+
 # Local upload directory (fallback when R2 is not configured)
 UPLOAD_DIR = "/data/uploads" if os.path.exists("/data") else "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -69,6 +73,42 @@ def get_content_type(ext: str) -> str:
         ".ico": "image/x-icon",
     }
     return mime_types.get(ext.lower(), "application/octet-stream")
+
+
+def optimize_image(content: bytes, ext: str) -> tuple[bytes, str]:
+    """
+    Re-encode an image as WebP, scaled down to MAX_IMAGE_DIMENSION.
+
+    Returns the original (content, ext) untouched for animated images,
+    vector/icon formats, or when the result would not be smaller.
+    """
+    if ext.lower() in (".svg", ".ico", ".gif"):
+        return content, ext
+
+    try:
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(content))
+        if getattr(img, "n_frames", 1) > 1:
+            return content, ext
+
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+
+        if max(img.size) > MAX_IMAGE_DIMENSION:
+            img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=6)
+        optimized = buf.getvalue()
+    except Exception as e:
+        logger.warning(f"Image optimization failed, keeping original: {e}")
+        return content, ext
+
+    if len(optimized) >= len(content):
+        return content, ext
+    return optimized, ".webp"
 
 
 def upload_file(content: bytes, ext: str) -> str:
