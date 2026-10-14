@@ -1689,6 +1689,71 @@ IMAGE_COLUMNS = [
 ]
 
 
+def _uploaded_image_urls(db: sqlite3.Connection) -> tuple[set[str], dict[tuple[str, str], list[tuple[int, str]]]]:
+    """Collect every uploaded image URL still not stored as WebP, plus the rows holding them."""
+    # Matches both R2/Fly absolute URLs and legacy relative "/uploads/..." paths
+    url_re = re.compile(r'(?:https?://[A-Za-z0-9._-]+)?/uploads/[A-Za-z0-9._-]+')
+
+    urls: set[str] = set()
+    rows_by_column: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    for table, column in IMAGE_COLUMNS:
+        try:
+            rows = [(r[0], r[1]) for r in db.execute(f"SELECT id, {column} FROM {table}") if r[1]]
+        except Exception:
+            continue
+        rows_by_column[(table, column)] = rows
+        for _, value in rows:
+            urls.update(m for m in url_re.findall(value) if not m.endswith(".webp"))
+    return urls, rows_by_column
+
+
+def _replace_image_urls(db: sqlite3.Connection, rows_by_column, replacements: dict[str, str]) -> int:
+    updated_rows = 0
+    for (table, column), rows in rows_by_column.items():
+        for row_id, value in rows:
+            new_value = value
+            for old, new in replacements.items():
+                new_value = new_value.replace(old, new)
+            if new_value != value:
+                db.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_value, row_id))
+                updated_rows += 1
+    db.commit()
+    return updated_rows
+
+
+@app.get("/api/admin/image-urls")
+def list_uploaded_image_urls(username: str = Depends(get_current_admin)):
+    """List the uploaded images not stored as WebP yet, so conversion can run off-box."""
+    db = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        urls, _ = _uploaded_image_urls(db)
+        return {"urls": sorted(urls)}
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/replace-image-urls")
+def replace_image_urls(payload: dict, username: str = Depends(get_current_admin)):
+    """
+    Point the database at already-uploaded replacements: {"mapping": {old_url: new_url}}.
+
+    Only rewrites URL strings (works for the JSON columns too); the images
+    themselves are converted and uploaded by the caller, which keeps the
+    256 MB API machine out of the decoding work.
+    """
+    mapping = {str(k): str(v) for k, v in (payload.get("mapping") or {}).items() if k and v}
+    if not mapping:
+        raise HTTPException(status_code=400, detail="mapping requerido")
+
+    db = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        _, rows_by_column = _uploaded_image_urls(db)
+        updated_rows = _replace_image_urls(db, rows_by_column, mapping)
+        return {"rows_updated": updated_rows, "urls_replaced": len(mapping)}
+    finally:
+        db.close()
+
+
 def _read_uploaded_image(url: str) -> bytes | None:
     """Read an uploaded image by its public URL, from R2/HTTP or the local upload dir."""
     if url.startswith("/uploads/"):
@@ -1708,21 +1773,9 @@ def optimize_existing_images(limit: int = 10, username: str = Depends(get_curren
     Defined as a sync endpoint on purpose: downloading and re-encoding is
     blocking work, so FastAPI runs it in a threadpool and the API keeps serving.
     """
-    # Matches both R2/Fly absolute URLs and legacy relative "/uploads/..." paths
-    url_re = re.compile(r'(?:https?://[A-Za-z0-9._-]+)?/uploads/[A-Za-z0-9._-]+')
-
     db = sqlite3.connect(DB_PATH, timeout=30)
     try:
-        urls: set[str] = set()
-        rows_by_column: dict[tuple[str, str], list[tuple[int, str]]] = {}
-        for table, column in IMAGE_COLUMNS:
-            try:
-                rows = [(r[0], r[1]) for r in db.execute(f"SELECT id, {column} FROM {table}") if r[1]]
-            except Exception:
-                continue
-            rows_by_column[(table, column)] = rows
-            for _, value in rows:
-                urls.update(m for m in url_re.findall(value) if not m.endswith(".webp"))
+        urls, rows_by_column = _uploaded_image_urls(db)
 
         batch = sorted(urls)[:limit]
         replacements: dict[str, str] = {}
@@ -1743,16 +1796,7 @@ def optimize_existing_images(limit: int = 10, username: str = Depends(get_curren
             except Exception:
                 failed += 1
 
-        updated_rows = 0
-        for (table, column), rows in rows_by_column.items():
-            for row_id, value in rows:
-                new_value = value
-                for old, new in replacements.items():
-                    new_value = new_value.replace(old, new)
-                if new_value != value:
-                    db.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_value, row_id))
-                    updated_rows += 1
-        db.commit()
+        updated_rows = _replace_image_urls(db, rows_by_column, replacements)
 
         return {
             "images_converted": len(replacements),

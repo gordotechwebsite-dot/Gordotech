@@ -82,7 +82,7 @@ def optimize_image(content: bytes, ext: str) -> tuple[bytes, str]:
     Returns the original (content, ext) untouched for animated images,
     vector/icon formats, or when the result would not be smaller.
     """
-    if ext.lower() in (".svg", ".ico", ".gif"):
+    if ext.lower() in (".svg", ".ico", ".gif", ".webp"):
         return content, ext
 
     try:
