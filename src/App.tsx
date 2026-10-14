@@ -2791,7 +2791,7 @@ function SemiNuevosPage({ isDarkMode }: { isDarkMode: boolean }) {
                       <img
                         src={product.image}
                         alt={product.name}
-                        loading="eager"
+                        loading={idx < 3 ? 'eager' : 'lazy'}
                         decoding="async"
                         className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform duration-500"
                         onLoad={(e) => { (e.target as HTMLImageElement).parentElement?.classList.remove('img-shimmer') }}
@@ -3585,7 +3585,7 @@ function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClic
             </div>
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 lg:gap-8">
-              {filtered.map(product => (
+              {filtered.map((product, idx) => (
                 <button
                   key={product.id}
                   onClick={() => navigate(`/producto/${product.id}/${getProductSlug(product)}`, { state: { product } })}
@@ -3704,6 +3704,8 @@ function PopupOverlay() {
             <img
               src={popup.image}
               alt={popup.title || 'Promocion'}
+              fetchPriority="high"
+              decoding="async"
               className="w-full h-auto rounded-2xl shadow-2xl object-contain max-h-[85vh]"
             />
           </a>
@@ -3711,6 +3713,8 @@ function PopupOverlay() {
           <img
             src={popup.image}
             alt={popup.title || 'Promocion'}
+            fetchPriority="high"
+            decoding="async"
             className="w-full h-auto rounded-2xl shadow-2xl object-contain max-h-[85vh]"
           />
         )}

@@ -11,7 +11,8 @@
     <link rel="dns-prefetch" href="https://gordotech-api.fly.dev" />
     <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
     <link rel="dns-prefetch" href="https://images.unsplash.com" />
-    <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+    <link rel="preconnect" href="https://pub-f5ad4152bdf445228c0baa87da0d79b9.r2.dev" crossorigin />
+    <link rel="dns-prefetch" href="https://pub-f5ad4152bdf445228c0baa87da0d79b9.r2.dev" />
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
 
     <!-- Primary Meta Tags -->
@@ -43,12 +44,26 @@
     <meta name="twitter:image" content="https://gordotech.co/images/og-preview-sede.jpg" />
 
     <!-- Google Analytics 4 -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-K60W8NJ6Y0"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'G-K60W8NJ6Y0');
+      (function () {
+        var loaded = false;
+        function loadGtag() {
+          if (loaded) return;
+          loaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=G-K60W8NJ6Y0';
+          document.head.appendChild(s);
+        }
+        ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(function (ev) {
+          window.addEventListener(ev, loadGtag, { once: true, passive: true });
+        });
+        window.addEventListener('load', function () { setTimeout(loadGtag, 2500); });
+      })();
     </script>
 
     <!-- Additional SEO -->
