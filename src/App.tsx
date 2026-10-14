@@ -1253,7 +1253,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
       const defaultTitle = 'Gordotech - iPhones, iPads, MacBooks y mas | Tu destino Apple en Boyaca'
       const defaultDesc = 'Gordotech - Tu destino Apple en Boyaca. iPhones nuevos y semi-nuevos, iPads, MacBooks, AirPods y Apple Watch al mejor precio. Envios a toda Colombia.'
       const defaultUrl = 'https://gordotech.co'
-      const defaultImage = 'https://gordotech.co/images/og-preview.png'
+      const defaultImage = 'https://gordotech.co/images/og-preview-sede.jpg'
 
       document.title = defaultTitle
       setMeta('meta[name="description"]', 'content', defaultDesc)
