@@ -1533,7 +1533,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                                   </div>
                                   <div className="p-3 md:p-4">
                                     <p className="text-xs text-blue-400 font-medium mb-1">{displayCondition(product.condition)}</p>
-                    <h4 className="text-sm md:text-base font-bold text-white mb-1.5 line-clamp-2">{product.name}</h4>
+                    <h4 className="text-[15px] md:text-lg font-bold text-white mb-1.5 line-clamp-2">{product.name}</h4>
                     <div className="flex flex-wrap items-center gap-1 mb-2">
                       {product.storageOptions.map((s, i) => (
                               <span key={i} className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] text-gray-400">{s}</span>
@@ -1551,7 +1551,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                               <p className="text-base md:text-lg font-bold text-white">{showDesde ? 'Desde ' : ''}$ {displayPrice}</p>
                             </div>
                           ) : product.condition !== 'Semi-usado' ? (
-                            <p className="text-xs text-blue-400 font-medium flex items-center gap-1 mb-1"><MessageCircle className="w-3 h-3" /> Consultar Precio</p>
+                            <p className="text-xs text-blue-400 font-medium mb-1">Consultar Precio</p>
                           ) : null })()}
                           <div className="flex flex-wrap gap-x-2">
                             {(['duitama', 'tunja'] as const).filter(c => product.available.includes(c)).map(c => (
@@ -1947,7 +1947,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                           </div>
                           <div className="p-3 md:p-4">
                             <p className={`text-xs font-medium mb-1 ${product.condition === 'Nuevo' ? 'text-blue-400' : 'text-amber-400'}`}>{displayCondition(product.condition)}</p>
-                            <h4 className="text-sm md:text-base font-bold text-white mb-1.5 line-clamp-2">{product.name}</h4>
+                            <h4 className="text-[15px] md:text-lg font-bold text-white mb-1.5 line-clamp-2">{product.name}</h4>
                             <div className="flex flex-wrap items-center gap-1 mb-2">
                               {product.storageOptions.map((s, i) => (
                                                             <span key={i} className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] text-gray-400">{s}</span>
@@ -1965,7 +1965,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
                                                             <p className="text-base md:text-lg font-bold text-white">{showDesde ? 'Desde ' : ''}$ {displayPrice}</p>
                                                           </div>
                             ) : product.condition !== 'Semi-usado' ? (
-                              <p className="text-xs text-blue-400 font-medium flex items-center gap-1 mb-1"><MessageCircle className="w-3 h-3" /> Consultar Precio</p>
+                              <p className="text-xs text-blue-400 font-medium mb-1">Consultar Precio</p>
                             ) : null })()}
                             <div className="flex flex-wrap gap-x-2">
                               {(['duitama', 'tunja'] as const).filter(c => product.available.includes(c)).map(c => (
@@ -3544,7 +3544,7 @@ function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClic
                   </div>
                   <div className="p-3 md:p-4">
                     <p className={`text-xs font-medium mb-1 ${product.condition === 'Nuevo' ? 'text-blue-400' : 'text-amber-400'}`}>{displayCondition(product.condition)}</p>
-                    <h4 className="text-sm md:text-base font-bold text-white mb-1.5 line-clamp-2">{product.name}</h4>
+                    <h4 className="text-[15px] md:text-lg font-bold text-white mb-1.5 line-clamp-2">{product.name}</h4>
                     <div className="flex flex-wrap items-center gap-1 mb-2">
                       {product.storageOptions.map((s, i) => (
                         <span key={i} className="px-1.5 py-0.5 rounded bg-white/5 text-[9px] text-gray-400">{s}</span>
@@ -3562,7 +3562,7 @@ function CategoryPage({ onAdminClick, isDarkMode, setIsDarkMode }: { onAdminClic
                         <p className="text-base md:text-lg font-bold text-white">{showDesde ? 'Desde ' : ''}$ {displayPrice}</p>
                       </div>
                     ) : product.condition !== 'Semi-usado' ? (
-                      <p className="text-xs text-blue-400 font-medium flex items-center gap-1 mb-1"><MessageCircle className="w-3 h-3" /> Consultar Precio</p>
+                      <p className="text-xs text-blue-400 font-medium mb-1">Consultar Precio</p>
                     ) : null })()}
                     <div className="flex flex-wrap gap-x-2">
                       {(['duitama', 'tunja'] as const).filter(c => product.available.includes(c)).map(c => (
@@ -3599,7 +3599,7 @@ function PopupOverlay() {
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    const alreadyDismissed = sessionStorage.getItem('gordotech_popup_dismissed')
+    const alreadyDismissed = localStorage.getItem('gordotech_popup_dismissed')
     if (alreadyDismissed) {
       setDismissed(true)
       return
@@ -3609,6 +3609,7 @@ function PopupOverlay() {
       .then(data => {
         if (data.popups && data.popups.length > 0) {
           setPopups(data.popups)
+          localStorage.setItem('gordotech_popup_dismissed', '1')
         }
       })
       .catch(() => {})
@@ -3616,7 +3617,7 @@ function PopupOverlay() {
 
   const handleClose = () => {
     setDismissed(true)
-    sessionStorage.setItem('gordotech_popup_dismissed', '1')
+    localStorage.setItem('gordotech_popup_dismissed', '1')
   }
 
   if (dismissed || popups.length === 0) return null
