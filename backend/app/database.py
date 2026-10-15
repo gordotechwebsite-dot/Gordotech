@@ -251,6 +251,49 @@ async def init_db():
             FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
         )
     """)
+
+    # Visits table (private visitor log: page views and contact clicks)
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT NOT NULL DEFAULT '',
+            session_id TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL DEFAULT 'pageview',
+            event TEXT NOT NULL DEFAULT '',
+            label TEXT NOT NULL DEFAULT '',
+            path TEXT NOT NULL DEFAULT '',
+            referrer TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT '',
+            utm_source TEXT NOT NULL DEFAULT '',
+            utm_medium TEXT NOT NULL DEFAULT '',
+            utm_campaign TEXT NOT NULL DEFAULT '',
+            ip TEXT NOT NULL DEFAULT '',
+            device TEXT NOT NULL DEFAULT '',
+            os TEXT NOT NULL DEFAULT '',
+            browser TEXT NOT NULL DEFAULT '',
+            screen TEXT NOT NULL DEFAULT '',
+            lang TEXT NOT NULL DEFAULT '',
+            user_agent TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_visits_created_at ON visits (created_at)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_visits_visitor ON visits (visitor_id)")
+
+    # IP geolocation cache, filled in batches from the admin panel
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS ip_geo (
+            ip TEXT PRIMARY KEY,
+            country TEXT NOT NULL DEFAULT '',
+            country_code TEXT NOT NULL DEFAULT '',
+            region TEXT NOT NULL DEFAULT '',
+            city TEXT NOT NULL DEFAULT '',
+            isp TEXT NOT NULL DEFAULT '',
+            latitude REAL,
+            longitude REAL,
+            resolved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
     await db.commit()
     await db.close()
