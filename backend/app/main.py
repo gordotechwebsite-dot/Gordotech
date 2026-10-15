@@ -1,10 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import Optional, Union, Any
 import aiosqlite
+import ipaddress
 import sqlite3
 import json
 import os
@@ -1850,6 +1851,376 @@ async def admin_stats(username: str = Depends(get_current_admin)):
         }
     finally:
         await db.close()
+
+# ==================== VISITS (PRIVATE VISITOR LOG) ====================
+
+_BOT_UA_RE = re.compile(
+    r"bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|facebookexternalhit|"
+    r"whatsapp/|telegram|curl|wget|python|axios|go-http|java/|okhttp",
+    re.IGNORECASE,
+)
+_track_hits: dict[str, tuple[float, int]] = {}
+TRACK_MAX_PER_MINUTE = 120
+VISITS_RETENTION_DAYS = 365
+VISIT_EVENTS = {"whatsapp", "llamada", "como_llegar", "red_social"}
+
+
+def _client_ip(request: Request) -> str:
+    ip = request.headers.get("fly-client-ip", "")
+    if not ip:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        ip = forwarded.split(",")[0].strip() if forwarded else ""
+    if not ip and request.client:
+        ip = request.client.host
+    return ip[:64]
+
+
+def _parse_user_agent(ua: str) -> tuple[str, str, str]:
+    """Return (device, os, browser) from a User-Agent string."""
+    low = ua.lower()
+    if "ipad" in low or "tablet" in low:
+        device = "Tablet"
+    elif "mobi" in low or "iphone" in low or "android" in low:
+        device = "Movil"
+    else:
+        device = "Escritorio"
+
+    if m := re.search(r"(?:iphone|cpu) os (\d+)", low):
+        os_name = f"iOS {m.group(1)}"
+    elif m := re.search(r"android (\d+)", low):
+        os_name = f"Android {m.group(1)}"
+    elif "windows" in low:
+        os_name = "Windows"
+    elif "macintosh" in low or "mac os x" in low:
+        os_name = "macOS"
+    elif "linux" in low:
+        os_name = "Linux"
+    else:
+        os_name = "Otro"
+
+    if "instagram" in low:
+        browser = "Instagram"
+    elif "fban" in low or "fbav" in low or "fb_iab" in low:
+        browser = "Facebook"
+    elif "musical_ly" in low or "bytedancewebview" in low or "tiktok" in low:
+        browser = "TikTok"
+    elif "edg/" in low or "edga/" in low or "edgios/" in low:
+        browser = "Edge"
+    elif "opr/" in low or "opera" in low:
+        browser = "Opera"
+    elif "samsungbrowser" in low:
+        browser = "Samsung Internet"
+    elif "crios" in low or "chrome/" in low:
+        browser = "Chrome"
+    elif "fxios" in low or "firefox/" in low:
+        browser = "Firefox"
+    elif "safari/" in low:
+        browser = "Safari"
+    else:
+        browser = "Otro"
+    return device, os_name, browser
+
+
+def _visit_source(utm_source: str, referrer: str, browser: str, first: bool) -> str:
+    """Name where a session came from; only the first page view of a session gets one."""
+    if not first:
+        return ""
+    if utm_source:
+        return utm_source[:60]
+    host = ""
+    if referrer:
+        host = re.sub(r"^https?://", "", referrer.lower()).split("/")[0].split(":")[0]
+        host = host.removeprefix("www.").removeprefix("m.").removeprefix("l.").removeprefix("lm.")
+    known = [
+        ("google", "Google"), ("bing", "Bing"), ("instagram", "Instagram"), ("facebook", "Facebook"),
+        ("fb.", "Facebook"), ("tiktok", "TikTok"), ("whatsapp", "WhatsApp"), ("wa.me", "WhatsApp"),
+        ("youtube", "YouTube"), ("t.co", "X"), ("twitter", "X"),
+    ]
+    for needle, name in known:
+        if needle in host:
+            return name
+    if host and "gordotech" not in host:
+        return host[:60]
+    if browser in ("Instagram", "Facebook", "TikTok"):
+        return browser
+    return "Directo"
+
+
+@app.post("/api/track", status_code=204)
+async def track_visit(request: Request):
+    """Public beacon: one row per page view or contact click. Accepts text/plain JSON (sendBeacon)."""
+    ua = request.headers.get("user-agent", "")
+    if not ua or _BOT_UA_RE.search(ua):
+        return Response(status_code=204)
+
+    ip = _client_ip(request)
+    now = time.time()
+    window_start, count = _track_hits.get(ip, (now, 0))
+    if now - window_start > 60:
+        window_start, count = now, 0
+    if count >= TRACK_MAX_PER_MINUTE:
+        return Response(status_code=204)
+    _track_hits[ip] = (window_start, count + 1)
+    if len(_track_hits) > 5000:
+        for key in [k for k, (start, _) in _track_hits.items() if now - start > 60]:
+            _track_hits.pop(key, None)
+
+    try:
+        raw = await request.body()
+        if len(raw) > 4096:
+            return Response(status_code=204)
+        data = json.loads(raw or b"{}")
+        if not isinstance(data, dict):
+            return Response(status_code=204)
+    except Exception:
+        return Response(status_code=204)
+
+    def field(name: str, limit: int = 300) -> str:
+        value = data.get(name)
+        return str(value)[:limit] if value is not None else ""
+
+    kind = "event" if data.get("kind") == "event" else "pageview"
+    event = field("event", 40) if kind == "event" else ""
+    if kind == "event" and event not in VISIT_EVENTS:
+        return Response(status_code=204)
+    visitor_id = field("visitor_id", 64)
+    if not visitor_id:
+        return Response(status_code=204)
+
+    device, os_name, browser = _parse_user_agent(ua)
+    utm_source = field("utm_source", 100)
+    referrer = field("referrer", 500)
+    source = _visit_source(utm_source, referrer, browser, kind == "pageview" and bool(data.get("first")))
+
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        await db.execute("PRAGMA busy_timeout=5000")
+        await db.execute(
+            """INSERT INTO visits (visitor_id, session_id, kind, event, label, path, referrer, source,
+                   utm_source, utm_medium, utm_campaign, ip, device, os, browser, screen, lang, user_agent)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                visitor_id, field("session_id", 64), kind, event, field("label", 120), field("path", 300),
+                referrer, source, utm_source, field("utm_medium", 100), field("utm_campaign", 100),
+                ip, device, os_name, browser, field("screen", 20), field("lang", 20), ua[:400],
+            ),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+    return Response(status_code=204)
+
+
+def _visits_since(days: int) -> str:
+    """SQL condition for the last `days` calendar days in Colombia time (days=1 is today)."""
+    days = max(1, min(days, VISITS_RETENTION_DAYS))
+    return f"date(created_at, '-5 hours') >= date('now', '-5 hours', '-{days - 1} days')"
+
+
+def _visits_db() -> sqlite3.Connection:
+    db = sqlite3.connect(DB_PATH, timeout=30)
+    db.row_factory = sqlite3.Row
+    return db
+
+
+@app.get("/api/admin/visits/summary")
+def admin_visits_summary(days: int = Query(7), username: str = Depends(get_current_admin)):
+    since = _visits_since(days)
+    db = _visits_db()
+    try:
+        totals = db.execute(f"""
+            SELECT COUNT(DISTINCT visitor_id) AS visitors,
+                   COUNT(DISTINCT session_id) AS sessions,
+                   SUM(kind = 'pageview') AS pageviews,
+                   SUM(event = 'whatsapp') AS whatsapp,
+                   SUM(event = 'llamada') AS llamada,
+                   SUM(event = 'como_llegar') AS como_llegar,
+                   SUM(event = 'red_social') AS red_social
+            FROM visits WHERE {since}
+        """).fetchone()
+
+        def top(sql: str, limit: int = 10) -> list[dict]:
+            return [{"name": r[0] or "Sin dato", "count": r[1]} for r in db.execute(f"{sql} LIMIT {limit}")]
+
+        return {
+            "totals": {k: totals[k] or 0 for k in totals.keys()},
+            "by_day": [
+                {"day": r[0], "visitors": r[1], "pageviews": r[2]}
+                for r in db.execute(f"""
+                    SELECT date(created_at, '-5 hours') AS day, COUNT(DISTINCT visitor_id), SUM(kind = 'pageview')
+                    FROM visits WHERE {since} GROUP BY day ORDER BY day
+                """)
+            ],
+            "by_hour": [
+                {"hour": int(r[0]), "count": r[1]}
+                for r in db.execute(f"""
+                    SELECT strftime('%H', created_at, '-5 hours') AS h, COUNT(DISTINCT session_id)
+                    FROM visits WHERE {since} GROUP BY h ORDER BY h
+                """)
+            ],
+            "cities": top(f"""
+                SELECT CASE WHEN g.ip IS NULL THEN 'Sin ubicar'
+                            WHEN g.city = '' THEN g.country
+                            ELSE g.city || ', ' || g.region END AS place,
+                       COUNT(DISTINCT v.visitor_id) AS c
+                FROM visits v LEFT JOIN ip_geo g ON g.ip = v.ip
+                WHERE {since.replace('created_at', 'v.created_at')} GROUP BY place ORDER BY c DESC
+            """),
+            "devices": top(f"SELECT device, COUNT(DISTINCT visitor_id) c FROM visits WHERE {since} GROUP BY device ORDER BY c DESC"),
+            "os": top(f"SELECT os, COUNT(DISTINCT visitor_id) c FROM visits WHERE {since} GROUP BY os ORDER BY c DESC"),
+            "browsers": top(f"SELECT browser, COUNT(DISTINCT visitor_id) c FROM visits WHERE {since} GROUP BY browser ORDER BY c DESC"),
+            "sources": top(f"SELECT source, COUNT(*) c FROM visits WHERE {since} AND source != '' GROUP BY source ORDER BY c DESC"),
+            "pages": top(f"SELECT path, COUNT(*) c FROM visits WHERE {since} AND kind = 'pageview' GROUP BY path ORDER BY c DESC", 15),
+            "products": top(f"""
+                SELECT path, COUNT(DISTINCT visitor_id) c FROM visits
+                WHERE {since} AND kind = 'pageview' AND path LIKE '/producto/%' GROUP BY path ORDER BY c DESC
+            """, 15),
+            "contacts": top(f"""
+                SELECT event || ' · ' || label AS name, COUNT(*) c FROM visits
+                WHERE {since} AND kind = 'event' GROUP BY name ORDER BY c DESC
+            """, 15),
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/visits/visitors")
+def admin_visits_visitors(days: int = Query(7), limit: int = Query(200), username: str = Depends(get_current_admin)):
+    since = _visits_since(days)
+    limit = max(1, min(limit, 500))
+    db = _visits_db()
+    try:
+        rows = db.execute(f"""
+            SELECT visitor_id, MIN(created_at) AS first_seen, MAX(created_at) AS last_seen, MAX(id) AS last_id,
+                   COUNT(DISTINCT session_id) AS sessions, SUM(kind = 'pageview') AS pageviews,
+                   SUM(event = 'whatsapp') AS whatsapp, SUM(kind = 'event') AS contacts,
+                   COUNT(DISTINCT ip) AS ips
+            FROM visits WHERE {since} GROUP BY visitor_id ORDER BY last_id DESC LIMIT {limit}
+        """).fetchall()
+        if not rows:
+            return {"visitors": []}
+
+        ids = [r["visitor_id"] for r in rows]
+        marks = ",".join("?" * len(ids))
+        last = {
+            r["visitor_id"]: r
+            for r in db.execute(f"""
+                SELECT v.visitor_id, v.ip, v.device, v.os, v.browser, v.path,
+                       g.city, g.region, g.country, g.isp
+                FROM visits v LEFT JOIN ip_geo g ON g.ip = v.ip
+                WHERE v.id IN ({",".join(str(r["last_id"]) for r in rows)})
+            """)
+        }
+        sources: dict[str, str] = {}
+        for r in db.execute(
+            f"SELECT visitor_id, source FROM visits WHERE visitor_id IN ({marks}) AND source != '' ORDER BY id",
+            ids,
+        ):
+            sources.setdefault(r["visitor_id"], r["source"])
+
+        visitors = []
+        for r in rows:
+            info = last.get(r["visitor_id"])
+            visitors.append({
+                "visitor_id": r["visitor_id"],
+                "first_seen": r["first_seen"],
+                "last_seen": r["last_seen"],
+                "sessions": r["sessions"],
+                "pageviews": r["pageviews"] or 0,
+                "whatsapp": r["whatsapp"] or 0,
+                "contacts": r["contacts"] or 0,
+                "ips": r["ips"],
+                "ip": info["ip"] if info else "",
+                "city": (info["city"] or "") if info else "",
+                "region": (info["region"] or "") if info else "",
+                "country": (info["country"] or "") if info else "",
+                "isp": (info["isp"] or "") if info else "",
+                "device": info["device"] if info else "",
+                "os": info["os"] if info else "",
+                "browser": info["browser"] if info else "",
+                "last_path": info["path"] if info else "",
+                "source": sources.get(r["visitor_id"], ""),
+            })
+        return {"visitors": visitors}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/visits/visitor/{visitor_id}")
+def admin_visitor_timeline(visitor_id: str, username: str = Depends(get_current_admin)):
+    db = _visits_db()
+    try:
+        rows = db.execute("""
+            SELECT v.created_at, v.kind, v.event, v.label, v.path, v.source, v.ip, v.device, v.os, v.browser,
+                   v.screen, g.city, g.region, g.country, g.isp
+            FROM visits v LEFT JOIN ip_geo g ON g.ip = v.ip
+            WHERE v.visitor_id = ? ORDER BY v.id DESC LIMIT 300
+        """, (visitor_id,)).fetchall()
+        return {"events": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+def _lookup_ip(ip: str) -> dict:
+    try:
+        addr = ipaddress.ip_address(ip)
+        if addr.is_private or addr.is_loopback or addr.is_reserved:
+            return {"country": "Red local"}
+    except ValueError:
+        return {"country": "IP invalida"}
+    req = urllib.request.Request(
+        f"https://ipwho.is/{ip}?fields=success,country,country_code,region,city,latitude,longitude,connection",
+        headers={"User-Agent": "gordotech-api"},
+    )
+    with urllib.request.urlopen(req, timeout=5) as res:
+        data = json.loads(res.read())
+    if not data.get("success"):
+        return {"country": "Desconocido"}
+    return {
+        "country": data.get("country") or "",
+        "country_code": data.get("country_code") or "",
+        "region": data.get("region") or "",
+        "city": data.get("city") or "",
+        "isp": ((data.get("connection") or {}).get("isp") or "")[:120],
+        "latitude": data.get("latitude"),
+        "longitude": data.get("longitude"),
+    }
+
+
+@app.post("/api/admin/visits/geolocate")
+def admin_geolocate_visits(limit: int = Query(40), username: str = Depends(get_current_admin)):
+    """Resolve city/ISP for IPs not looked up yet, in small batches so the single API worker stays free."""
+    limit = max(1, min(limit, 100))
+    db = _visits_db()
+    try:
+        db.execute(f"DELETE FROM visits WHERE created_at < datetime('now', '-{VISITS_RETENTION_DAYS} days')")
+        db.commit()
+        pending = [r[0] for r in db.execute(f"""
+            SELECT DISTINCT v.ip FROM visits v LEFT JOIN ip_geo g ON g.ip = v.ip
+            WHERE g.ip IS NULL AND v.ip != '' ORDER BY v.id DESC LIMIT {limit}
+        """)]
+        resolved, failed = 0, 0
+        for ip in pending:
+            try:
+                geo = _lookup_ip(ip)
+            except Exception:
+                failed += 1
+                continue
+            db.execute(
+                """INSERT OR REPLACE INTO ip_geo (ip, country, country_code, region, city, isp, latitude, longitude)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (ip, geo.get("country", ""), geo.get("country_code", ""), geo.get("region", ""),
+                 geo.get("city", ""), geo.get("isp", ""), geo.get("latitude"), geo.get("longitude")),
+            )
+            resolved += 1
+        db.commit()
+        remaining = db.execute("""
+            SELECT COUNT(DISTINCT v.ip) FROM visits v LEFT JOIN ip_geo g ON g.ip = v.ip
+            WHERE g.ip IS NULL AND v.ip != ''
+        """).fetchone()[0]
+        return {"resolved": resolved, "failed": failed, "remaining": remaining}
+    finally:
+        db.close()
 
 # ==================== POPUPS (PUBLIC) ====================
 

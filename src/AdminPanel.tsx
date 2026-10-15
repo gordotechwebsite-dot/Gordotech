@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, Trash2, Edit3, Save, LogOut, Upload, BarChart3, Package, Circle, Wrench, Eye, Search, Lock, FolderOpen, Image, Type, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Play, Film, MapPin, Star, MessageSquare, Camera } from 'lucide-react'
+import { X, Plus, Trash2, Edit3, Save, LogOut, Upload, BarChart3, Package, Circle, Wrench, Eye, Search, Lock, FolderOpen, Image, Type, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Play, Film, MapPin, Star, MessageSquare, Camera, Users } from 'lucide-react'
 import { resolveColor } from './lib/colors'
+import VisitsPanel from './VisitsPanel'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://gordotech-api.fly.dev'
 
@@ -142,11 +143,12 @@ const CATEGORY_BANNER_OPTIONS = [
   { value: 'accesorios', label: 'Accesorios' },
 ]
 
-type Tab = 'dashboard' | 'products' | 'bubbles' | 'services' | 'gallery' | 'slideshow' | 'marquee' | 'settings' | 'sucursales' | 'resenas' | 'popups' | 'portadas'
+type Tab = 'dashboard' | 'visitas' | 'products' | 'bubbles' | 'services' | 'gallery' | 'slideshow' | 'marquee' | 'settings' | 'sucursales' | 'resenas' | 'popups' | 'portadas'
 
 const TAB_PATHS: Record<string, Tab> = {
   '/': 'dashboard',
   '/dashboard': 'dashboard',
+  '/visitas': 'visitas',
   '/productos': 'products',
   '/categorias': 'bubbles',
   '/burbujas': 'bubbles',
@@ -163,6 +165,7 @@ const TAB_PATHS: Record<string, Tab> = {
 
 const TAB_TO_PATH: Record<Tab, string> = {
   dashboard: '/dashboard',
+  visitas: '/visitas',
   products: '/productos',
   bubbles: '/categorias',
   services: '/servicios',
@@ -1357,6 +1360,7 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-5 h-5" /> },
+    { id: 'visitas', label: 'Visitas', icon: <Users className="w-5 h-5" /> },
     { id: 'products', label: 'Productos', icon: <Package className="w-5 h-5" /> },
     { id: 'bubbles', label: 'Categorias', icon: <FolderOpen className="w-5 h-5" /> },
     { id: 'services', label: 'Servicios', icon: <Wrench className="w-5 h-5" /> },
@@ -1431,6 +1435,8 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
             </div>
           </div>
         )}
+
+        {activeTab === 'visitas' && token && <VisitsPanel token={token} />}
 
         {/* PRODUCTS TAB */}
         {activeTab === 'products' && (

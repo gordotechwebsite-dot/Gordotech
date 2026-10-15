@@ -156,6 +156,7 @@ const CITY_ADDRESSES: Record<'duitama' | 'tunja', { short: string; full: string 
 
 // Color map imported from shared module
 import { resolveColor } from './lib/colors'
+import { trackPageView, trackContactClick } from './lib/track'
 
 function TikTokIcon({ className }: { className?: string }) {
   return (
@@ -2138,6 +2139,7 @@ function Store({ onAdminClick, productSlug, productId, initialProduct, isDarkMod
               </a>
             </div>
             <p className="text-gray-500 text-xs">&copy; 2026 Gordotech. Todos los derechos reservados.</p>
+            <p className="text-gray-600 text-[10px] max-w-md">Este sitio registra datos de navegacion (direccion IP, ubicacion aproximada, dispositivo y paginas visitadas) para mejorar la atencion.</p>
             <p className="text-gray-600 text-[10px] italic">Conectando tus suenos.</p>
           </div>
         </div>
@@ -3740,6 +3742,21 @@ function PopupOverlay() {
   )
 }
 
+function VisitTracker() {
+  const location = useLocation()
+
+  useEffect(() => {
+    trackPageView(location.pathname, location.search)
+  }, [location.pathname, location.search])
+
+  useEffect(() => {
+    document.addEventListener('click', trackContactClick, true)
+    return () => document.removeEventListener('click', trackContactClick, true)
+  }, [])
+
+  return null
+}
+
 function App() {
   const [showAdmin, setShowAdmin] = useState(false)
 
@@ -3789,6 +3806,7 @@ function App() {
   return (
     <>
       <PopupOverlay />
+      <VisitTracker />
       <Routes>
         <Route path="/plan-retoma" element={<PlanRetomaPage isDarkMode={isDarkMode} />} />
         <Route path="/reparacion" element={<ReparacionPage isDarkMode={isDarkMode} />} />
