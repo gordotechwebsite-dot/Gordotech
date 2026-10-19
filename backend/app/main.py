@@ -5,9 +5,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, Union, Any
 import aiosqlite
+import sqlite3
 import json
 import os
 import re
+import urllib.request
 import uuid
 import shutil
 import time
@@ -21,7 +23,7 @@ import logging
 import httpx
 
 from app.database import get_db, init_db, seed_default_data, DB_PATH
-from app.storage import upload_file, is_r2_enabled, UPLOAD_DIR
+from app.storage import upload_file, optimize_image, is_r2_enabled, UPLOAD_DIR
 from app import price_sync
 
 app = FastAPI()
@@ -272,6 +274,24 @@ class PopupUpdate(BaseModel):
     active: Optional[bool] = None
     sort_order: Optional[int] = None
 
+class CategoryBannerCreate(BaseModel):
+    category: str = ""
+    image: str = ""
+    title: str = ""
+    subtitle: str = ""
+    link: str = ""
+    active: bool = True
+    sort_order: int = 0
+
+class CategoryBannerUpdate(BaseModel):
+    category: Optional[str] = None
+    image: Optional[str] = None
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    link: Optional[str] = None
+    active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -507,6 +527,18 @@ def row_to_popup(row):
         "id": row["id"],
         "image": row["image"],
         "title": row["title"],
+        "link": row["link"],
+        "active": bool(row["active"]),
+        "sort_order": row["sort_order"],
+    }
+
+def row_to_category_banner(row):
+    return {
+        "id": row["id"],
+        "category": row["category"],
+        "image": row["image"],
+        "title": row["title"],
+        "subtitle": row["subtitle"],
         "link": row["link"],
         "active": bool(row["active"]),
         "sort_order": row["sort_order"],
@@ -1721,10 +1753,148 @@ async def upload_image(file: UploadFile = File(...), username: str = Depends(get
     except Exception:
         pass  # If cropping fails, use original image
     
+    content, ext = optimize_image(content, ext)
+
     url = upload_file(content, ext)
     filename = url.split("/")[-1]
     
     return {"url": url, "filename": filename}
+
+
+# Tables/columns that store uploaded image URLs (plain URL or JSON with URLs inside)
+IMAGE_COLUMNS = [
+    ("categories", "image"),
+    ("products", "image"),
+    ("products", "images"),
+    ("products", "color_images"),
+    ("model_bubbles", "image"),
+    ("repair_services", "image"),
+    ("hero_slides", "image"),
+    ("sucursales", "image"),
+    ("repair_gallery", "image"),
+    ("popups", "image"),
+    ("category_banners", "image"),
+]
+
+
+def _uploaded_image_urls(db: sqlite3.Connection) -> tuple[set[str], dict[tuple[str, str], list[tuple[int, str]]]]:
+    """Collect every uploaded image URL still not stored as WebP, plus the rows holding them."""
+    # Matches both R2/Fly absolute URLs and legacy relative "/uploads/..." paths
+    url_re = re.compile(r'(?:https?://[A-Za-z0-9._-]+)?/uploads/[A-Za-z0-9._-]+')
+
+    urls: set[str] = set()
+    rows_by_column: dict[tuple[str, str], list[tuple[int, str]]] = {}
+    for table, column in IMAGE_COLUMNS:
+        try:
+            rows = [(r[0], r[1]) for r in db.execute(f"SELECT id, {column} FROM {table}") if r[1]]
+        except Exception:
+            continue
+        rows_by_column[(table, column)] = rows
+        for _, value in rows:
+            urls.update(m for m in url_re.findall(value) if not m.endswith(".webp"))
+    return urls, rows_by_column
+
+
+def _replace_image_urls(db: sqlite3.Connection, rows_by_column, replacements: dict[str, str]) -> int:
+    updated_rows = 0
+    for (table, column), rows in rows_by_column.items():
+        for row_id, value in rows:
+            new_value = value
+            for old, new in replacements.items():
+                new_value = new_value.replace(old, new)
+            if new_value != value:
+                db.execute(f"UPDATE {table} SET {column} = ? WHERE id = ?", (new_value, row_id))
+                updated_rows += 1
+    db.commit()
+    return updated_rows
+
+
+@app.get("/api/admin/image-urls")
+def list_uploaded_image_urls(username: str = Depends(get_current_admin)):
+    """List the uploaded images not stored as WebP yet, so conversion can run off-box."""
+    db = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        urls, _ = _uploaded_image_urls(db)
+        return {"urls": sorted(urls)}
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/replace-image-urls")
+def replace_image_urls(payload: dict, username: str = Depends(get_current_admin)):
+    """
+    Point the database at already-uploaded replacements: {"mapping": {old_url: new_url}}.
+
+    Only rewrites URL strings (works for the JSON columns too); the images
+    themselves are converted and uploaded by the caller, which keeps the
+    256 MB API machine out of the decoding work.
+    """
+    mapping = {str(k): str(v) for k, v in (payload.get("mapping") or {}).items() if k and v}
+    if not mapping:
+        raise HTTPException(status_code=400, detail="mapping requerido")
+
+    db = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        _, rows_by_column = _uploaded_image_urls(db)
+        updated_rows = _replace_image_urls(db, rows_by_column, mapping)
+        return {"rows_updated": updated_rows, "urls_replaced": len(mapping)}
+    finally:
+        db.close()
+
+
+def _read_uploaded_image(url: str) -> bytes | None:
+    """Read an uploaded image by its public URL, from R2/HTTP or the local upload dir."""
+    if url.startswith("/uploads/"):
+        path = os.path.join(UPLOAD_DIR, url.split("/")[-1])
+        return open(path, "rb").read() if os.path.exists(path) else None
+    with urllib.request.urlopen(url, timeout=30) as resp:
+        return resp.read()
+
+
+@app.post("/api/admin/optimize-images")
+def optimize_existing_images(limit: int = 10, username: str = Depends(get_current_admin)):
+    """
+    Re-encode already-uploaded images as WebP and point the database at the new
+    files, at most `limit` per call. Originals are left in place, so this is
+    safe to re-run until `remaining` is 0.
+
+    Defined as a sync endpoint on purpose: downloading and re-encoding is
+    blocking work, so FastAPI runs it in a threadpool and the API keeps serving.
+    """
+    db = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        urls, rows_by_column = _uploaded_image_urls(db)
+
+        batch = sorted(urls)[:limit]
+        replacements: dict[str, str] = {}
+        saved_bytes = 0
+        failed = 0
+        for url in batch:
+            try:
+                content = _read_uploaded_image(url)
+                if not content:
+                    failed += 1
+                    continue
+                ext = os.path.splitext(url)[1] or ".jpg"
+                optimized, new_ext = optimize_image(content, ext)
+                if new_ext == ext:
+                    continue
+                replacements[url] = upload_file(optimized, new_ext)
+                saved_bytes += len(content) - len(optimized)
+            except Exception:
+                failed += 1
+
+        updated_rows = _replace_image_urls(db, rows_by_column, replacements)
+
+        return {
+            "images_converted": len(replacements),
+            "rows_updated": updated_rows,
+            "failed": failed,
+            "saved_mb": round(saved_bytes / (1024 * 1024), 2),
+            "remaining": len(urls) - len(batch),
+        }
+    finally:
+        db.close()
 
 # ==================== ADMIN STATS ====================
 
@@ -1852,5 +2022,98 @@ async def admin_toggle_popup(popup_id: int, username: str = Depends(get_current_
         await db.execute("UPDATE popups SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", (popup_id,))
         await db.commit()
         return {"message": "Popup actualizado"}
+    finally:
+        await db.close()
+
+# ==================== CATEGORY BANNERS (PUBLIC) ====================
+
+@app.get("/api/category-banners")
+async def get_category_banners(category: Optional[str] = Query(None)):
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        if category:
+            cursor = await db.execute(
+                "SELECT * FROM category_banners WHERE active = 1 AND category = ? ORDER BY sort_order ASC",
+                (category,)
+            )
+        else:
+            cursor = await db.execute("SELECT * FROM category_banners WHERE active = 1 ORDER BY sort_order ASC")
+        rows = await cursor.fetchall()
+        return {"banners": [row_to_category_banner(r) for r in rows]}
+    finally:
+        await db.close()
+
+# ==================== ADMIN CATEGORY BANNERS CRUD ====================
+
+@app.get("/api/admin/category-banners")
+async def admin_get_category_banners(username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        cursor = await db.execute("SELECT * FROM category_banners ORDER BY sort_order ASC, id ASC")
+        rows = await cursor.fetchall()
+        return {"banners": [row_to_category_banner(r) for r in rows]}
+    finally:
+        await db.close()
+
+@app.post("/api/admin/category-banners")
+async def admin_create_category_banner(banner: CategoryBannerCreate, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        cursor = await db.execute(
+            "INSERT INTO category_banners (category, image, title, subtitle, link, active, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (banner.category, banner.image, banner.title, banner.subtitle, banner.link, 1 if banner.active else 0, banner.sort_order)
+        )
+        await db.commit()
+        return {"message": "Portada creada", "id": cursor.lastrowid}
+    finally:
+        await db.close()
+
+@app.put("/api/admin/category-banners/{banner_id}")
+async def admin_update_category_banner(banner_id: int, banner: CategoryBannerUpdate, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        cursor = await db.execute("SELECT * FROM category_banners WHERE id = ?", (banner_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Portada no encontrada")
+        updates = {}
+        if banner.category is not None: updates["category"] = banner.category
+        if banner.image is not None: updates["image"] = banner.image
+        if banner.title is not None: updates["title"] = banner.title
+        if banner.subtitle is not None: updates["subtitle"] = banner.subtitle
+        if banner.link is not None: updates["link"] = banner.link
+        if banner.active is not None: updates["active"] = 1 if banner.active else 0
+        if banner.sort_order is not None: updates["sort_order"] = banner.sort_order
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            values = list(updates.values()) + [banner_id]
+            await db.execute(f"UPDATE category_banners SET {set_clause} WHERE id = ?", values)
+            await db.commit()
+        return {"message": "Portada actualizada"}
+    finally:
+        await db.close()
+
+@app.delete("/api/admin/category-banners/{banner_id}")
+async def admin_delete_category_banner(banner_id: int, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        cursor = await db.execute("SELECT id FROM category_banners WHERE id = ?", (banner_id,))
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Portada no encontrada")
+        await db.execute("DELETE FROM category_banners WHERE id = ?", (banner_id,))
+        await db.commit()
+        return {"message": "Portada eliminada"}
+    finally:
+        await db.close()
+
+@app.post("/api/admin/category-banners/{banner_id}/toggle")
+async def admin_toggle_category_banner(banner_id: int, username: str = Depends(get_current_admin)):
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        await db.execute("UPDATE category_banners SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", (banner_id,))
+        await db.commit()
+        return {"message": "Portada actualizada"}
     finally:
         await db.close()
