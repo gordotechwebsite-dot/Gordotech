@@ -16,8 +16,13 @@ from datetime import datetime, timedelta
 from jose import jwt, JWTError
 import bcrypt as bcrypt_lib
 
+import asyncio
+import logging
+import httpx
+
 from app.database import get_db, init_db, seed_default_data, DB_PATH
 from app.storage import upload_file, is_r2_enabled, UPLOAD_DIR
+from app import price_sync
 
 app = FastAPI()
 
@@ -62,6 +67,9 @@ async def startup():
     await seed_default_data()
     import logging
     logger = logging.getLogger(__name__)
+    if os.environ.get("PRICE_SYNC_ENABLED") == "1":
+        asyncio.create_task(price_sync_loop())
+        logger.info("Price sync from Google Sheets is ENABLED")
     if is_r2_enabled():
         logger.info("Cloudflare R2 storage is ENABLED - images will be stored in R2")
     else:
@@ -92,6 +100,7 @@ class ProductCreate(BaseModel):
     featured_trending: bool = False
     sort_order: int = 0
     model_3d: str = ""
+    sheet_name: str = ""
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -111,6 +120,7 @@ class ProductUpdate(BaseModel):
     featured_trending: Optional[bool] = None
     sort_order: Optional[int] = None
     model_3d: Optional[str] = None
+    sheet_name: Optional[str] = None
 
 class CategoryCreate(BaseModel):
     slug: str
@@ -383,6 +393,7 @@ def row_to_product(row):
         "featured_trending": bool(row["featured_trending"]),
         "sort_order": row["sort_order"],
         "model_3d": row["model_3d"] if "model_3d" in keys else "",
+        "sheet_name": row["sheet_name"] if "sheet_name" in keys else "",
         "variants": [],  # populated separately
     }
 
@@ -741,12 +752,12 @@ async def admin_create_product(product: ProductCreate, username: str = Depends(g
             sort_order = min_sort - 1
 
         cursor = await db.execute(
-            """INSERT INTO products (name, category, condition, image, images, colors, color_images, storage_options, badge, available, price, old_price, description, featured_recommended, featured_trending, sort_order, model_3d)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO products (name, category, condition, image, images, colors, color_images, storage_options, badge, available, price, old_price, description, featured_recommended, featured_trending, sort_order, model_3d, sheet_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (product.name, product.category, product.condition, primary_image, json.dumps(images), json.dumps(product.colors),
              json.dumps(normalize_color_images_payload(product.color_images)), json.dumps(product.storage_options), product.badge, json.dumps(product.available),
              product.price, product.old_price, product.description, int(product.featured_recommended),
-             int(product.featured_trending), sort_order, product.model_3d)
+             int(product.featured_trending), sort_order, product.model_3d, product.sheet_name)
         )
         await db.commit()
         new_id = cursor.lastrowid
@@ -802,6 +813,8 @@ async def admin_update_product(product_id: int, product: ProductUpdate, username
             updates["sort_order"] = product.sort_order
         if product.model_3d is not None:
             updates["model_3d"] = product.model_3d
+        if product.sheet_name is not None:
+            updates["sheet_name"] = product.sheet_name
         
         if updates:
             updates["updated_at"] = datetime.utcnow().isoformat()
@@ -1595,6 +1608,81 @@ async def admin_delete_variant(product_id: int, variant_id: int, username: str =
         return {"message": "Variante eliminada"}
     finally:
         await db.close()
+
+# ==================== PRICE SYNC (GOOGLE SHEETS, READ-ONLY) ====================
+
+async def load_catalog_for_sync() -> list[dict]:
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    try:
+        cursor = await db.execute("SELECT * FROM products ORDER BY id ASC")
+        rows = await cursor.fetchall()
+        products = []
+        for row in rows:
+            product = row_to_product(row)
+            product["variants"] = await get_variants_for_product(db, product["id"])
+            products.append(product)
+        return products
+    finally:
+        await db.close()
+
+async def build_price_plan() -> dict:
+    async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+        response = await client.get(price_sync.SHEET_CSV_URL)
+        response.raise_for_status()
+    sheet_rows = price_sync.parse_sheet(response.text)
+    plan = price_sync.build_plan(sheet_rows, await load_catalog_for_sync())
+    plan["sheet_rows"] = len(sheet_rows)
+    return plan
+
+async def apply_price_updates(updates: list[dict]) -> int:
+    if not updates:
+        return 0
+    db = await aiosqlite.connect(DB_PATH)
+    try:
+        for update in updates:
+            if update["variant_id"]:
+                await db.execute(
+                    "UPDATE product_variants SET price = ? WHERE id = ?",
+                    (update["new"], update["variant_id"])
+                )
+            else:
+                await db.execute(
+                    "UPDATE products SET price = ?, updated_at = ? WHERE id = ?",
+                    (update["new"], datetime.utcnow().isoformat(), update["product_id"])
+                )
+        await db.commit()
+        return len(updates)
+    finally:
+        await db.close()
+
+@app.get("/api/admin/price-sync/preview")
+async def admin_price_sync_preview(username: str = Depends(get_current_admin)):
+    return await build_price_plan()
+
+@app.post("/api/admin/price-sync/apply")
+async def admin_price_sync_apply(
+    include_review: bool = Query(False),
+    username: str = Depends(get_current_admin),
+):
+    plan = await build_price_plan()
+    updates = plan["changes"] + (plan["needs_review"] if include_review else [])
+    applied = await apply_price_updates(updates)
+    return {**plan, "applied": applied}
+
+async def price_sync_loop():
+    logger = logging.getLogger(__name__)
+    while True:
+        await asyncio.sleep(price_sync.SYNC_INTERVAL_SECONDS)
+        try:
+            plan = await build_price_plan()
+            applied = await apply_price_updates(plan["changes"])
+            logger.info(
+                "price sync: %s precios actualizados, %s para revisar, %s filas ignoradas",
+                applied, len(plan["needs_review"]), len(plan["skipped"]),
+            )
+        except Exception as exc:
+            logger.warning("price sync failed: %s", exc)
 
 # ==================== IMAGE UPLOAD ==
 
