@@ -55,6 +55,7 @@ async def init_db():
             model_3d TEXT DEFAULT '',
             old_price TEXT DEFAULT '',
             color_images TEXT NOT NULL DEFAULT '{}',
+            sheet_name TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -89,6 +90,12 @@ async def init_db():
         await db.execute("SELECT color_images FROM products LIMIT 1")
     except Exception:
         await db.execute("ALTER TABLE products ADD COLUMN color_images TEXT NOT NULL DEFAULT '{}'")
+
+    # Migration: add sheet_name column if missing (name of the product in the Google Sheets price list)
+    try:
+        await db.execute("SELECT sheet_name FROM products LIMIT 1")
+    except Exception:
+        await db.execute("ALTER TABLE products ADD COLUMN sheet_name TEXT NOT NULL DEFAULT ''")
 
     
     # Model bubbles table

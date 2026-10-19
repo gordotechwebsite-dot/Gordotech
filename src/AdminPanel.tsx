@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { X, Plus, Trash2, Edit3, Save, LogOut, Upload, BarChart3, Package, Circle, Wrench, Eye, Search, Lock, FolderOpen, Image, Type, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Play, Film, MapPin, Star, MessageSquare, Camera } from 'lucide-react'
+import { X, Plus, Trash2, Edit3, Save, LogOut, Upload, BarChart3, Package, Circle, Wrench, Eye, Search, Lock, FolderOpen, Image, Type, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Play, Film, MapPin, Star, MessageSquare, Camera, DollarSign } from 'lucide-react'
 import { resolveColor } from './lib/colors'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://gordotech-api.fly.dev'
@@ -38,6 +38,7 @@ type Product = {
   featured_recommended: boolean
   featured_trending: boolean
   sort_order: number
+  sheet_name: string
   variants?: Variant[]
 }
 
@@ -122,6 +123,34 @@ type Popup = {
   sort_order: number
 }
 
+type Tab = 'dashboard' | 'products' | 'bubbles' | 'services' | 'gallery' | 'slideshow' | 'marquee' | 'settings' | 'sucursales' | 'resenas' | 'popups' | 'portadas' | 'precios'
+
+type PriceSyncRow = {
+  product_name: string
+  storage: string
+  color: string
+  current: string
+  new: string
+  row: number
+}
+
+type PriceSyncSkipped = {
+  row: number
+  name: string
+  storage: string
+  colors: string[]
+  reason: string
+}
+
+type PriceSyncPlan = {
+  sheet_rows: number
+  changes: PriceSyncRow[]
+  needs_review: PriceSyncRow[]
+  unchanged: PriceSyncRow[]
+  skipped: PriceSyncSkipped[]
+  applied?: number
+}
+
 type CategoryBanner = {
   id: number
   category: string
@@ -142,7 +171,6 @@ const CATEGORY_BANNER_OPTIONS = [
   { value: 'accesorios', label: 'Accesorios' },
 ]
 
-type Tab = 'dashboard' | 'products' | 'bubbles' | 'services' | 'gallery' | 'slideshow' | 'marquee' | 'settings' | 'sucursales' | 'resenas' | 'popups' | 'portadas'
 
 const TAB_PATHS: Record<string, Tab> = {
   '/': 'dashboard',
@@ -159,6 +187,7 @@ const TAB_PATHS: Record<string, Tab> = {
   '/resenas': 'resenas',
   '/popups': 'popups',
   '/portadas': 'portadas',
+  '/precios': 'precios',
 }
 
 const TAB_TO_PATH: Record<Tab, string> = {
@@ -174,6 +203,7 @@ const TAB_TO_PATH: Record<Tab, string> = {
   resenas: '/resenas',
   popups: '/popups',
   portadas: '/portadas',
+  precios: '/precios',
 }
 
 function getTabFromPath(): Tab {
@@ -485,6 +515,7 @@ function ProductForm({ product, token, categories, onSave, onCancel }: {
     featured_recommended: product?.featured_recommended || false,
     featured_trending: product?.featured_trending || false,
     sort_order: product?.sort_order || 0,
+    sheet_name: product?.sheet_name || '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -512,6 +543,7 @@ function ProductForm({ product, token, categories, onSave, onCancel }: {
         featured_recommended: form.featured_recommended,
         featured_trending: form.featured_trending,
         sort_order: form.sort_order,
+        sheet_name: form.sheet_name.trim() || form.name,
       }
 
       if (product) {
@@ -679,6 +711,12 @@ function ProductForm({ product, token, categories, onSave, onCancel }: {
               <label className="block text-gray-400 text-sm md:text-base mb-1.5">Badge / Etiqueta</label>
               <input value={form.badge} onChange={e => setForm({...form, badge: e.target.value})}
                 className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50" placeholder="Nuevo, Oferta, etc." />
+            </div>
+            <div>
+              <label className="block text-gray-400 text-sm md:text-base mb-1.5">Nombre en la hoja de precios</label>
+              <input value={form.sheet_name} onChange={e => setForm({...form, sheet_name: e.target.value})}
+                className="w-full bg-gray-800/50 border border-white/10 rounded-lg px-4 py-3 text-white text-sm md:text-base focus:outline-none focus:border-blue-500/50" placeholder={form.name || 'iPhone 18 pro max'} />
+              <p className="text-gray-500 text-xs mt-1.5">Tal como aparece en la columna de Google Sheets. Si son varios nombres, separalos con punto y coma.</p>
             </div>
           </div>
 
@@ -1367,6 +1405,7 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
     { id: 'resenas', label: 'Resenas', icon: <MessageSquare className="w-5 h-5" /> },
     { id: 'popups', label: 'Pop Up', icon: <Image className="w-5 h-5" /> },
     { id: 'portadas', label: 'Portadas', icon: <Image className="w-5 h-5" /> },
+    { id: 'precios', label: 'Precios (Sheets)', icon: <DollarSign className="w-5 h-5" /> },
     { id: 'settings', label: 'Config', icon: <Lock className="w-5 h-5" /> },
   ]
 
@@ -2259,6 +2298,9 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
           </div>
         )}
 
+        {/* PRECIOS (SHEETS) TAB */}
+        {activeTab === 'precios' && <PriceSyncTab token={token} />}
+
         {/* POPUPS TAB */}
         {activeTab === 'popups' && (
           <div className="space-y-6">
@@ -2587,6 +2629,119 @@ export default function AdminPanel({ onExit }: { onExit: () => void }) {
               <button onClick={handleDelete} className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors text-sm md:text-base font-medium">Eliminar</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ==================== PRICE SYNC TAB ====================
+
+function PriceSyncTab({ token }: { token: string }) {
+  const [plan, setPlan] = useState<PriceSyncPlan | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadPlan = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      setPlan(await apiGet('/api/admin/price-sync/preview', token))
+    } catch {
+      setError('No se pudo leer la hoja de precios')
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => { loadPlan() }, [loadPlan])
+
+  const applyChanges = async () => {
+    setApplying(true)
+    setError('')
+    try {
+      setPlan(await apiPost('/api/admin/price-sync/apply', {}, token))
+    } catch {
+      setError('No se pudieron aplicar los precios')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  const renderRows = (rows: PriceSyncRow[]) => (
+    <div className="divide-y divide-white/5">
+      {rows.map(row => (
+        <div key={`${row.product_name}-${row.storage}-${row.color}-${row.row}`} className="py-2.5 flex items-center justify-between gap-4 text-sm">
+          <span className="text-gray-300">
+            {row.product_name}
+            {(row.storage || row.color) && (
+              <span className="text-gray-500"> · {[row.storage, row.color].filter(Boolean).join(' · ')}</span>
+            )}
+          </span>
+          <span className="whitespace-nowrap">
+            <span className="text-gray-500 line-through">{row.current || '-'}</span>
+            <span className="text-white ml-2">{row.new}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl md:text-4xl font-bold" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '2px' }}>PRECIOS (SHEETS)</h2>
+        <div className="flex items-center gap-3">
+          <button onClick={loadPlan} disabled={loading}
+            className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded-xl transition-colors text-sm md:text-base font-medium disabled:opacity-50">
+            {loading ? 'Leyendo...' : 'Volver a leer'}
+          </button>
+          <button onClick={applyChanges} disabled={applying || !plan || plan.changes.length === 0}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl transition-colors text-sm md:text-base font-medium disabled:opacity-50">
+            {applying ? 'Aplicando...' : `Aplicar ${plan ? plan.changes.length : 0} precios`}
+          </button>
+        </div>
+      </div>
+
+      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {plan?.applied !== undefined && (
+        <p className="text-green-400 text-sm">{plan.applied} precios actualizados en la pagina.</p>
+      )}
+
+      {plan && (
+        <div className="space-y-6">
+          <p className="text-gray-400 text-sm">
+            {plan.sheet_rows} filas leidas de la hoja (solo lectura; la hoja nunca se modifica). Los productos sin
+            "Nombre en la hoja de precios" no se tocan.
+          </p>
+
+          <div className="bg-gray-900/50 border border-white/10 rounded-2xl p-5">
+            <h3 className="text-lg font-semibold mb-2">Precios que cambian ({plan.changes.length})</h3>
+            {plan.changes.length === 0 ? <p className="text-gray-500 text-sm">Nada por cambiar.</p> : renderRows(plan.changes)}
+          </div>
+
+          {plan.needs_review.length > 0 && (
+            <div className="bg-gray-900/50 border border-yellow-500/20 rounded-2xl p-5">
+              <h3 className="text-lg font-semibold mb-2 text-yellow-400">Para revisar ({plan.needs_review.length})</h3>
+              <p className="text-gray-500 text-sm mb-2">Cambian mas del 40%, se aplican solo a mano.</p>
+              {renderRows(plan.needs_review)}
+            </div>
+          )}
+
+          {plan.skipped.length > 0 && (
+            <div className="bg-gray-900/50 border border-white/10 rounded-2xl p-5">
+              <h3 className="text-lg font-semibold mb-2">Filas ignoradas ({plan.skipped.length})</h3>
+              <div className="divide-y divide-white/5">
+                {plan.skipped.map(row => (
+                  <div key={`${row.row}-${row.reason}`} className="py-2.5 text-sm">
+                    <span className="text-gray-300">Fila {row.row} · {row.name}</span>
+                    <span className="text-gray-500"> — {row.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
