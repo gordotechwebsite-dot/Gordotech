@@ -1704,8 +1704,8 @@ async def admin_price_sync_apply(
 
 async def price_sync_loop():
     logger = logging.getLogger(__name__)
+    await asyncio.sleep(price_sync.STARTUP_DELAY_SECONDS)
     while True:
-        await asyncio.sleep(price_sync.SYNC_INTERVAL_SECONDS)
         try:
             plan = await build_price_plan()
             applied = await apply_price_updates(plan["changes"])
@@ -1715,6 +1715,7 @@ async def price_sync_loop():
             )
         except Exception as exc:
             logger.warning("price sync failed: %s", exc)
+        await asyncio.sleep(price_sync.SYNC_INTERVAL_SECONDS)
 
 # ==================== IMAGE UPLOAD ==
 
