@@ -20,6 +20,8 @@ SHEET_GID = os.environ.get("PRICE_SHEET_GID", "0")
 SHEET_CSV_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid={SHEET_GID}"
 
 SYNC_INTERVAL_SECONDS = int(os.environ.get("PRICE_SYNC_INTERVAL", "900"))
+# The container autostops when idle, so the first sync runs right after boot.
+STARTUP_DELAY_SECONDS = int(os.environ.get("PRICE_SYNC_STARTUP_DELAY", "15"))
 
 # Largest relative price change applied automatically; anything bigger is
 # reported so a human can confirm it was not a typo in the sheet.
